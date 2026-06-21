@@ -9,8 +9,11 @@ import pytest
 from config.settings import Settings, get_settings
 
 
-def test_settings_loads_defaults() -> None:
+def test_settings_loads_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """All required fields should have non-None defaults."""
+    # Clear any CI-injected env vars that would shadow the defaults we're testing.
+    for key in ("APP_NAME", "LOG_LEVEL", "MAX_RETRIES", "RATE_LIMIT_RPS", "EMAIL_PORT", "MINIO_BUCKET"):
+        monkeypatch.delenv(key, raising=False)
     s = Settings()
     assert s.app_name == "DataForge"
     assert s.log_level == "INFO"

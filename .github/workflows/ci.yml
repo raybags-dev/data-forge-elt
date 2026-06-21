@@ -30,7 +30,7 @@ jobs:
         continue-on-error: true  # tests mock playwright; don't block on download failures
 
       - name: Ruff lint
-        run: uv run ruff check .
+        run: uv run ruff check . --output-format github
 
       - name: Pytest
         env:
