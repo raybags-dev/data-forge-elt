@@ -30,8 +30,11 @@ env/
 *.duckdb.wal
 warehouse/*.duckdb
 
-# Data lake (large binary/data files)
-datalake/
+# Data lake (large binary/data files — exclude data dirs but keep the Python package)
+datalake/raw/
+datalake/bronze/
+datalake/silver/
+datalake/gold/
 
 # Logs (keep placeholder)
 logs/
@@ -73,6 +76,7 @@ desktop.ini
 # Large data files
 *.parquet
 *.csv
+!dbt/seeds/*.csv
 
 # Screenshots
 screenshots/

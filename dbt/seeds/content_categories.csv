@@ -1,0 +1,5 @@
+source_name,category,subcategory,is_active
+reddit,Social Media,Discussion,true
+steam,Gaming,Reviews,true
+imdb,Entertainment,Movies,true
+news,News,Articles,true
