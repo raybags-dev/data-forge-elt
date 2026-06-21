@@ -11,7 +11,7 @@ Exports:
 
 from crawlers.base.browser import BrowserManager
 from crawlers.base.crawler import BaseCrawler
-from crawlers.base.models import CrawledPage, CrawlResult, CrawlStatus, CrawlerProfile
+from crawlers.base.models import CrawledPage, CrawlerProfile, CrawlResult, CrawlStatus
 from crawlers.base.pagination import (
     CursorStrategy,
     NoPagination,

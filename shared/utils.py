@@ -7,9 +7,10 @@ where explicitly documented.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 
 def ensure_directory(path: str | Path) -> Path:
@@ -32,7 +33,7 @@ def utc_now() -> datetime:
     Returns:
         Timezone-aware datetime in UTC.
     """
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def timestamp_str() -> str:

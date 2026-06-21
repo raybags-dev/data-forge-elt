@@ -7,6 +7,7 @@ Wraps the Playwright async API and exposes a clean interface used by
 from __future__ import annotations
 
 import time
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -31,19 +32,19 @@ class BrowserManager:
         profile: The :class:`CrawlerProfile` supplying browser configuration.
     """
 
-    def __init__(self, profile: "CrawlerProfile", settings: "Settings") -> None:
+    def __init__(self, profile: CrawlerProfile, settings: Settings) -> None:
         """Initialise the manager without launching the browser.
 
         Args:
             profile: Crawler profile (user-agent, headers, cookies, proxy, …).
             settings: Application settings (timeout, headless flag, …).
         """
-        self.profile: "CrawlerProfile" = profile
-        self._settings: "Settings" = settings
-        self._playwright: "Playwright | None" = None
-        self._browser: "Browser | None" = None
-        self._context: "BrowserContext | None" = None
-        self._page: "Page | None" = None
+        self.profile: CrawlerProfile = profile
+        self._settings: Settings = settings
+        self._playwright: Playwright | None = None
+        self._browser: Browser | None = None
+        self._context: BrowserContext | None = None
+        self._page: Page | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ class BrowserManager:
 
     # ── Context manager ───────────────────────────────────────────────────────
 
-    async def __aenter__(self) -> "BrowserManager":
+    async def __aenter__(self) -> BrowserManager:
         """Start the browser and return ``self``."""
         await self.start()
         return self
@@ -141,7 +142,7 @@ class BrowserManager:
 
     # ── Page operations ───────────────────────────────────────────────────────
 
-    async def get_page(self) -> "Page":
+    async def get_page(self) -> Page:
         """Return the active Playwright :class:`Page`.
 
         Raises:
@@ -151,7 +152,7 @@ class BrowserManager:
             raise RuntimeError("BrowserManager is not running. Call start() first.")
         return self._page
 
-    async def navigate(self, url: str) -> "CrawledPage":
+    async def navigate(self, url: str) -> CrawledPage:
         """Navigate to *url* and return a :class:`CrawledPage` snapshot.
 
         Args:
@@ -163,7 +164,7 @@ class BrowserManager:
         Raises:
             RuntimeError: If the browser has not been started.
         """
-        from datetime import timezone, datetime
+        from datetime import datetime
 
         from crawlers.base.models import CrawledPage
 
@@ -187,7 +188,7 @@ class BrowserManager:
             text=text,
             title=title,
             headers=headers,
-            loaded_at=datetime.now(tz=timezone.utc),
+            loaded_at=datetime.now(tz=UTC),
             response_time_ms=response_time_ms,
         )
 

@@ -13,21 +13,23 @@ Usage:
 from __future__ import annotations
 
 import sys
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    from config.settings import Settings
     from loguru import Logger
+
+    from config.settings import Settings
 
 # ── Context variables bound into every log record ─────────────────────────────
 _pipeline_id_var: ContextVar[str] = ContextVar("pipeline_id", default="")
 _source_var: ContextVar[str] = ContextVar("source", default="")
-_extra_var: ContextVar[dict[str, Any]] = ContextVar("extra", default={})
+_extra_var: ContextVar[dict[str, Any] | None] = ContextVar("extra", default=None)
 
 
 def _build_format() -> str:
@@ -47,8 +49,9 @@ def _patched_record(record: dict[str, Any]) -> None:
     record["extra"].setdefault("source", _source_var.get())
     record["extra"].setdefault("name", record["name"])
     extra = _extra_var.get()
-    for key, value in extra.items():
-        record["extra"].setdefault(key, value)
+    if extra:
+        for key, value in extra.items():
+            record["extra"].setdefault(key, value)
 
 
 def configure_logging(settings: Settings) -> None:
@@ -86,7 +89,7 @@ def configure_logging(settings: Settings) -> None:
     )
 
 
-def get_logger(name: str) -> "Logger":
+def get_logger(name: str) -> Logger:
     """Return a Loguru logger bound with *name*.
 
     Args:
@@ -103,7 +106,7 @@ def pipeline_context(
     pipeline_id: str,
     source: str = "",
     **extra: Any,
-) -> Generator[None, None, None]:
+) -> Generator[None]:
     """Context manager that binds pipeline metadata to all log records within its scope.
 
     Args:

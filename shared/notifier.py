@@ -243,7 +243,7 @@ class NotifierFactory:
     """Factory that assembles a MultiNotifier from application settings."""
 
     @staticmethod
-    def build_notifier(settings: "Settings") -> Notifier:
+    def build_notifier(settings: Settings) -> Notifier:
         """Create a MultiNotifier with all configured channels.
 
         Always includes ConsoleNotifier. Adds Discord, Slack, and Email

@@ -54,6 +54,11 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = [
+    "B008",   # FastAPI explicitly requires Depends() in function signature defaults
+    "B017",   # pytest.raises(Exception) is acceptable in tests
+    "E501",   # line length handled by black
+]
 
 [tool.black]
 line-length = 100

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from shared.logger import get_logger
-
 from app.api.schemas.datasets import DatasetItem, DatasetListResponse
+from shared.logger import get_logger
 
 if TYPE_CHECKING:
     from datalake.manager import DataLakeManager
@@ -21,7 +20,7 @@ class DatasetService:
         lake: DataLakeManager instance for accessing lake files.
     """
 
-    def __init__(self, lake: "DataLakeManager") -> None:
+    def __init__(self, lake: DataLakeManager) -> None:
         self._lake = lake
         self._log = get_logger(__name__)
 

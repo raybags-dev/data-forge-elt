@@ -30,7 +30,7 @@ class KaggleDataset(BaseModel):
     last_updated: datetime | None = None
 
     @model_validator(mode="after")
-    def _set_full_name(self) -> "KaggleDataset":
+    def _set_full_name(self) -> KaggleDataset:
         """Auto-compute full_name from owner/name if not supplied."""
         if not self.full_name:
             self.full_name = f"{self.owner}/{self.name}"

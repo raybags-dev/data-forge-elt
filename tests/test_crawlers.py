@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -16,12 +16,11 @@ from crawlers.reddit.parser import RedditParser
 from crawlers.steam.models import SteamGame
 from crawlers.steam.parser import SteamParser
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _utc_now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _make_page(html: str = "", url: str = "https://example.com") -> CrawledPage:

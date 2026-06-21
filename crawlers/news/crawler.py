@@ -50,9 +50,9 @@ class NewsCrawler(BaseCrawler):
     def __init__(
         self,
         profile: CrawlerProfile,
-        browser_manager: "BrowserManager",
-        rate_limiter: "RateLimiter",
-        notifier: "Notifier",
+        browser_manager: BrowserManager,
+        rate_limiter: RateLimiter,
+        notifier: Notifier,
         parser: NewsParser | None = None,
     ) -> None:
         super().__init__(
@@ -67,10 +67,10 @@ class NewsCrawler(BaseCrawler):
     @classmethod
     def build(
         cls,
-        settings: "Settings",
-        notifier: "Notifier",
+        settings: Settings,
+        notifier: Notifier,
         profile: CrawlerProfile | None = None,
-    ) -> "NewsCrawler":
+    ) -> NewsCrawler:
         """Factory — builds a fully-wired :class:`NewsCrawler`.
 
         Args:

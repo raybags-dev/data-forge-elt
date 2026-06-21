@@ -50,9 +50,9 @@ class ImdbCrawler(BaseCrawler):
     def __init__(
         self,
         profile: CrawlerProfile,
-        browser_manager: "BrowserManager",
-        rate_limiter: "RateLimiter",
-        notifier: "Notifier",
+        browser_manager: BrowserManager,
+        rate_limiter: RateLimiter,
+        notifier: Notifier,
         parser: ImdbParser | None = None,
     ) -> None:
         super().__init__(
@@ -67,10 +67,10 @@ class ImdbCrawler(BaseCrawler):
     @classmethod
     def build(
         cls,
-        settings: "Settings",
-        notifier: "Notifier",
+        settings: Settings,
+        notifier: Notifier,
         profile: CrawlerProfile | None = None,
-    ) -> "ImdbCrawler":
+    ) -> ImdbCrawler:
         """Factory — builds a fully-wired :class:`ImdbCrawler`.
 
         Args:

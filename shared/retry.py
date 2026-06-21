@@ -9,8 +9,9 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import httpx
 from tenacity import (
@@ -64,7 +65,7 @@ def _get_default_policy() -> RetryPolicy:
 
 def build_retry_decorator(
     policy: RetryPolicy,
-    logger: "Logger | logging.Logger | None" = None,
+    logger: Logger | logging.Logger | None = None,
 ) -> Callable:
     """Build a Tenacity ``@retry`` decorator from *policy*.
 

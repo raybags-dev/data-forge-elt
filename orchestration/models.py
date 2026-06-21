@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from shared.metrics import PipelineMetrics
 
 
-class PipelineStatus(str, Enum):
+class PipelineStatus(StrEnum):
     """Lifecycle states for a pipeline run."""
 
     PENDING = "PENDING"

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-
 _PANDAS_TO_DUCKDB: dict[str, str] = {
     "object": "VARCHAR",
     "string": "VARCHAR",
@@ -92,7 +91,7 @@ class SchemaInferrer:
         qualified = f'"{schema}"."{table_name}"'
         return f"INSERT INTO {qualified} ({col_list}) VALUES ({placeholders})"
 
-    def _map_dtype(self, dtype: "pd.api.types.CategoricalDtype | object") -> str:
+    def _map_dtype(self, dtype: pd.api.types.CategoricalDtype | object) -> str:
         """Return the DuckDB type string for a pandas dtype.
 
         Args:

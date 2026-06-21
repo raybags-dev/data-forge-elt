@@ -7,7 +7,7 @@ next page given the current URL and HTML body.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -82,11 +83,10 @@ def test_truncate_string_short_strings_unchanged() -> None:
 
 def test_utc_now_is_timezone_aware() -> None:
     """utc_now() should return a timezone-aware datetime."""
-    from datetime import timezone
 
     now = utc_now()
     assert now.tzinfo is not None
-    assert now.tzinfo == timezone.utc
+    assert now.tzinfo == UTC
 
 
 def test_timestamp_str_no_colons() -> None:

@@ -100,15 +100,9 @@ def _parse_log_line(line: str) -> LogEntry | None:
         data = json.loads(line)
         record = data.get("record", data)
         time_data = record.get("time", {})
-        if isinstance(time_data, dict):
-            timestamp = time_data.get("repr", "")
-        else:
-            timestamp = str(time_data)
+        timestamp = time_data.get("repr", "") if isinstance(time_data, dict) else str(time_data)
         level_data = record.get("level", {})
-        if isinstance(level_data, dict):
-            level_str = level_data.get("name", "INFO")
-        else:
-            level_str = str(level_data)
+        level_str = level_data.get("name", "INFO") if isinstance(level_data, dict) else str(level_data)
         message = record.get("message", str(data))
         extra = record.get("extra", {})
         pid = extra.get("pipeline_id") if isinstance(extra, dict) else None

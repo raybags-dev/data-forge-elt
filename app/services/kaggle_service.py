@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from shared.logger import get_logger
-
 from app.api.schemas.kaggle import KaggleDownloadResponse
+from shared.logger import get_logger
 
 if TYPE_CHECKING:
     from config.settings import Settings
@@ -21,7 +20,7 @@ class KaggleService:
         notifier: Notifier for completion/error alerts.
     """
 
-    def __init__(self, settings: "Settings", notifier: "Notifier") -> None:
+    def __init__(self, settings: Settings, notifier: Notifier) -> None:
         self._settings = settings
         self._notifier = notifier
         self._log = get_logger(__name__)

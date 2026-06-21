@@ -6,6 +6,7 @@ individual title pages.  Uses BeautifulSoup with stable CSS selectors.
 
 from __future__ import annotations
 
+import contextlib
 import re
 
 from bs4 import BeautifulSoup, Tag
@@ -107,7 +108,6 @@ class ImdbParser:
 
     def _build_from_row(self, el: Tag) -> ImdbTitle:
         """Extract fields from a chart row element."""
-        title_col = el.select_one(".titleColumn")
         link = (
             el.select_one(".titleColumn a")
             or el.select_one("a[href*='/title/tt']")
@@ -134,10 +134,8 @@ class ImdbParser:
         rating_el = el.select_one(".imdbRating strong, .ipc-rating-star--rating")
         rating = 0.0
         if rating_el:
-            try:
+            with contextlib.suppress(ValueError):
                 rating = float(rating_el.get_text(strip=True))
-            except ValueError:
-                pass
 
         votes_el = el.select_one(".imdbRating strong[title]")
         votes = 0
@@ -184,10 +182,8 @@ class ImdbParser:
         rating_el = soup.select_one("[data-testid='hero-rating-bar__aggregate-rating__score'] span")
         rating = 0.0
         if rating_el:
-            try:
+            with contextlib.suppress(ValueError):
                 rating = float(rating_el.get_text(strip=True))
-            except ValueError:
-                pass
 
         plot_el = soup.select_one("[data-testid='plot']")
         plot = plot_el.get_text(strip=True) if plot_el else ""

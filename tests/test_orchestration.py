@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from datetime import UTC
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,7 +14,6 @@ from orchestration.models import (
     PipelineStepModel,
 )
 from orchestration.pipeline import PipelineOrchestrator
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -125,13 +125,13 @@ def test_pipeline_cancel_run(orchestrator, simple_config) -> None:
     assert orchestrator.cancel_run("nonexistent-id") is False
 
     # Manually insert a PENDING run
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     pending_run = PipelineRun(
         run_id="pending-001",
         config=simple_config,
         status=PipelineStatus.PENDING,
-        started_at=datetime.now(tz=timezone.utc),
+        started_at=datetime.now(tz=UTC),
     )
     orchestrator._runs["pending-001"] = pending_run
     assert orchestrator.cancel_run("pending-001") is True

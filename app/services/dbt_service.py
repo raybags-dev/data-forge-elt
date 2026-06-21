@@ -7,9 +7,8 @@ import subprocess
 import time
 from typing import TYPE_CHECKING
 
-from shared.logger import get_logger
-
 from app.api.schemas.dbt import DbtBuildResponse
+from shared.logger import get_logger
 
 if TYPE_CHECKING:
     from config.settings import Settings
@@ -25,7 +24,7 @@ class DbtService:
         settings: Application settings with dbt project/profiles paths.
     """
 
-    def __init__(self, settings: "Settings") -> None:
+    def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._log = get_logger(__name__)
 

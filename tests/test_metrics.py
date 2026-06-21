@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
-from shared.metrics import PipelineMetrics, PipelineMetricsCollector
+from shared.metrics import PipelineMetricsCollector
 
 
 def test_metrics_start_sets_started_at() -> None:

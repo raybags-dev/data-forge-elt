@@ -48,7 +48,7 @@ class DuckDBConnection:
             self._conn.close()
             self._conn = None
 
-    def __enter__(self) -> "DuckDBConnection":
+    def __enter__(self) -> DuckDBConnection:
         """Open connection on entering the context manager."""
         self.connect()
         return self

@@ -18,7 +18,7 @@ class ParquetLoader:
         logger: Loguru Logger for structured logging.
     """
 
-    def __init__(self, logger: "Logger") -> None:
+    def __init__(self, logger: Logger) -> None:
         self._log = logger
 
     def load(self, path: Path) -> pd.DataFrame:

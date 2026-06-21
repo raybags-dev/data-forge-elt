@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ── DbtService tests ───────────────────────────────────────────────────────────
 
@@ -56,7 +54,6 @@ def test_dbt_service_parse_model_count_with_ok_pattern() -> None:
 @pytest.mark.asyncio
 async def test_dbt_service_build_runs_subprocess(tmp_settings) -> None:
     """DbtService.build() should invoke subprocess.run and return DbtBuildResponse."""
-    import subprocess
 
     from app.services.dbt_service import DbtService
 
@@ -116,10 +113,9 @@ async def test_dbt_service_handles_subprocess_exception(tmp_settings) -> None:
 
 def test_dataset_service_list_empty_lake(tmp_path) -> None:
     """DatasetService.list_datasets() must return empty list when lake has no files."""
+    from app.services.dataset_service import DatasetService
     from datalake.manager import DataLakeManager
     from shared.logger import get_logger
-
-    from app.services.dataset_service import DatasetService
 
     lake = DataLakeManager(base_path=tmp_path / "datalake", logger=get_logger("test"))
     lake.setup()
@@ -135,10 +131,9 @@ def test_dataset_service_list_with_parquet(tmp_path) -> None:
     """DatasetService.list_datasets() must return one item when a parquet exists."""
     import pandas as pd
 
+    from app.services.dataset_service import DatasetService
     from datalake.manager import DataLakeManager
     from shared.logger import get_logger
-
-    from app.services.dataset_service import DatasetService
 
     lake = DataLakeManager(base_path=tmp_path / "datalake", logger=get_logger("test"))
     lake.setup()
@@ -156,10 +151,9 @@ def test_dataset_service_list_with_parquet(tmp_path) -> None:
 
 def test_dataset_service_get_preview_not_found(tmp_path) -> None:
     """DatasetService.get_preview() returns empty list for non-existent datasets."""
+    from app.services.dataset_service import DatasetService
     from datalake.manager import DataLakeManager
     from shared.logger import get_logger
-
-    from app.services.dataset_service import DatasetService
 
     lake = DataLakeManager(base_path=tmp_path / "datalake", logger=get_logger("test"))
     lake.setup()
@@ -174,10 +168,9 @@ def test_dataset_service_get_preview_returns_rows(tmp_path) -> None:
     """DatasetService.get_preview() returns up to 100 rows from a matching file."""
     import pandas as pd
 
+    from app.services.dataset_service import DatasetService
     from datalake.manager import DataLakeManager
     from shared.logger import get_logger
-
-    from app.services.dataset_service import DatasetService
 
     lake = DataLakeManager(base_path=tmp_path / "datalake", logger=get_logger("test"))
     lake.setup()
@@ -198,11 +191,10 @@ def test_dataset_service_get_preview_returns_rows(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_crawl_service_returns_response(tmp_path, tmp_settings) -> None:
     """CrawlService.run_crawl() must return a CrawlResponse with a run_id."""
+    from app.services.crawl_service import CrawlService
     from datalake.manager import DataLakeManager
     from shared.logger import get_logger
     from shared.notifier import NotifierFactory
-
-    from app.services.crawl_service import CrawlService
 
     lake = DataLakeManager(base_path=tmp_path / "datalake", logger=get_logger("test"))
     lake.setup()
@@ -225,10 +217,9 @@ async def test_crawl_service_returns_response(tmp_path, tmp_settings) -> None:
 @pytest.mark.asyncio
 async def test_pipeline_service_get_status_not_found(tmp_settings) -> None:
     """PipelineService.get_status() returns None for unknown run_id."""
+    from app.services.pipeline_service import PipelineService
     from orchestration.pipeline import PipelineOrchestrator
     from shared.logger import get_logger
-
-    from app.services.pipeline_service import PipelineService
 
     mock_warehouse = MagicMock()
     mock_lake = MagicMock()
@@ -251,10 +242,9 @@ async def test_pipeline_service_get_status_not_found(tmp_settings) -> None:
 @pytest.mark.asyncio
 async def test_pipeline_service_list_runs_empty(tmp_settings) -> None:
     """PipelineService.list_runs() returns empty list when no runs have been executed."""
+    from app.services.pipeline_service import PipelineService
     from orchestration.pipeline import PipelineOrchestrator
     from shared.logger import get_logger
-
-    from app.services.pipeline_service import PipelineService
 
     mock_warehouse = MagicMock()
     mock_lake = MagicMock()

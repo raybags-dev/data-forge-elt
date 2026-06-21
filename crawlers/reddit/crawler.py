@@ -5,7 +5,6 @@ Crawls old.reddit.com listing pages and extracts post metadata.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from crawlers.base.crawler import BaseCrawler
@@ -56,9 +55,9 @@ class RedditCrawler(BaseCrawler):
     def __init__(
         self,
         profile: CrawlerProfile,
-        browser_manager: "BrowserManager",
-        rate_limiter: "RateLimiter",
-        notifier: "Notifier",
+        browser_manager: BrowserManager,
+        rate_limiter: RateLimiter,
+        notifier: Notifier,
         parser: RedditParser | None = None,
     ) -> None:
         super().__init__(
@@ -73,10 +72,10 @@ class RedditCrawler(BaseCrawler):
     @classmethod
     def build(
         cls,
-        settings: "Settings",
-        notifier: "Notifier",
+        settings: Settings,
+        notifier: Notifier,
         profile: CrawlerProfile | None = None,
-    ) -> "RedditCrawler":
+    ) -> RedditCrawler:
         """Factory method — builds a fully-wired :class:`RedditCrawler`.
 
         Args:

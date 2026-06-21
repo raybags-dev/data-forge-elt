@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 
 from shared.retry import RetryPolicy, build_retry_decorator, network_retry
 

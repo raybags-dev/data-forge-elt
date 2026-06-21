@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,8 +31,8 @@ class DuckDBWarehouse:
 
     def __init__(
         self,
-        connection: "DuckDBConnection",
-        logger: "Logger",
+        connection: DuckDBConnection,
+        logger: Logger,
     ) -> None:
         self._conn = connection
         self._log = logger
@@ -221,7 +221,7 @@ class DuckDBWarehouse:
             DataFrame with an added 'loaded_at' column.
         """
         df = df.copy()
-        df["loaded_at"] = datetime.now(tz=timezone.utc)
+        df["loaded_at"] = datetime.now(tz=UTC)
         return df
 
     def _ensure_table(

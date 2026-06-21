@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from orchestration.models import PipelineConfig, PipelineRun, PipelineStatus
 from shared.logger import get_logger, pipeline_context
 from shared.metrics import PipelineMetrics, PipelineMetricsCollector
 from shared.notifier import NotificationLevel, NotificationPayload
-
-from orchestration.models import PipelineConfig, PipelineRun, PipelineStatus
 
 if TYPE_CHECKING:
     from loguru import Logger
@@ -38,11 +37,11 @@ class PipelineOrchestrator:
 
     def __init__(
         self,
-        warehouse: "DuckDBWarehouse",
-        lake: "DataLakeManager",
-        notifier: "Notifier",
-        settings: "Settings",
-        logger: "Logger | None" = None,
+        warehouse: DuckDBWarehouse,
+        lake: DataLakeManager,
+        notifier: Notifier,
+        settings: Settings,
+        logger: Logger | None = None,
     ) -> None:
         self._warehouse = warehouse
         self._lake = lake
@@ -128,7 +127,7 @@ class PipelineOrchestrator:
         if run.status not in (PipelineStatus.RUNNING, PipelineStatus.PENDING):
             return False
         run.status = PipelineStatus.CANCELLED
-        run.ended_at = datetime.now(tz=timezone.utc)
+        run.ended_at = datetime.now(tz=UTC)
         self._log.info(f"Run {run_id} cancelled")
         return True
 
@@ -138,7 +137,7 @@ class PipelineOrchestrator:
             run_id=str(uuid.uuid4()),
             config=config,
             status=PipelineStatus.RUNNING,
-            started_at=datetime.now(tz=timezone.utc),
+            started_at=datetime.now(tz=UTC),
         )
 
     def _build_steps(self, config: PipelineConfig) -> dict:
@@ -198,7 +197,7 @@ class PipelineOrchestrator:
             context: Final pipeline context.
             metrics: Completed metrics snapshot.
         """
-        run.ended_at = datetime.now(tz=timezone.utc)
+        run.ended_at = datetime.now(tz=UTC)
         run.metrics = metrics
 
         if run.status == PipelineStatus.RUNNING:

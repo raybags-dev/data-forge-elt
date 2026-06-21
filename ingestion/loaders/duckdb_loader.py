@@ -26,8 +26,8 @@ class DuckDBLoader:
 
     def __init__(
         self,
-        warehouse: "DuckDBWarehouse",
-        logger: "Logger",
+        warehouse: DuckDBWarehouse,
+        logger: Logger,
     ) -> None:
         self._warehouse = warehouse
         self._log = logger
@@ -38,7 +38,7 @@ class DuckDBLoader:
         parquet_path: Path,
         schema: str = "main",
         mode: str = "append",
-    ) -> "LoadResult":
+    ) -> LoadResult:
         """Load a Parquet file from disk into a DuckDB table.
 
         Args:
@@ -64,7 +64,7 @@ class DuckDBLoader:
         df: pd.DataFrame,
         schema: str = "main",
         mode: str = "append",
-    ) -> "LoadResult":
+    ) -> LoadResult:
         """Load a DataFrame into a DuckDB table.
 
         Args:

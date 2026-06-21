@@ -24,7 +24,7 @@ class CsvToParquetConverter:
     _CHUNK_SIZE: int = 100_000
     _PARQUET_ENGINE: str = "pyarrow"
 
-    def __init__(self, logger: "Logger") -> None:
+    def __init__(self, logger: Logger) -> None:
         self._log = logger
 
     def convert(self, csv_path: Path, output_path: Path | None = None) -> Path:

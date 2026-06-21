@@ -47,7 +47,7 @@ jobs:
           files: coverage.xml
           fail_ci_if_error: false
 
-  # ── dbt: parse + deps ───────────────────────────────────────────────────────
+  # ── dbt: deps + parse ───────────────────────────────────────────────────────
   dbt-validate:
     name: dbt parse & deps
     runs-on: ubuntu-latest
@@ -58,15 +58,20 @@ jobs:
         with:
           python-version: "3.13"
 
-      - run: uv sync
+      - name: Install Python deps
+        run: uv sync
 
       - name: dbt deps
+        env:
+          DUCKDB_PATH: /tmp/ci-dbt.duckdb
         run: uv run dbt deps --project-dir dbt --profiles-dir dbt
 
       - name: dbt parse (syntax check)
+        env:
+          DUCKDB_PATH: /tmp/ci-dbt.duckdb
         run: uv run dbt parse --project-dir dbt --profiles-dir dbt
 
-  # ── React UI: typecheck + build ─────────────────────────────────────────────
+  # ── React UI: build ─────────────────────────────────────────────────────────
   ui-build:
     name: React UI build
     runs-on: ubuntu-latest
@@ -75,16 +80,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: app/ui/package-lock.json
+          node-version: "22"   # LTS — Node 20 is deprecated on GH Actions runners
 
       - name: Install
         working-directory: app/ui
-        run: npm ci || npm install
+        run: npm install
 
       - name: Build
         working-directory: app/ui
+        env:
+          VITE_API_BASE_URL: http://localhost:8002
         run: npm run build
 
   # ── Docker: verify images build ─────────────────────────────────────────────

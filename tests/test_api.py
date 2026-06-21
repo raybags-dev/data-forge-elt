@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,7 +10,6 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -70,7 +68,7 @@ def app(tmp_path):
 
 
 @pytest_asyncio.fixture()
-async def client(app) -> AsyncGenerator[AsyncClient, None]:
+async def client(app) -> AsyncGenerator[AsyncClient]:
     """Async HTTP client wired to the test app via ASGI transport."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -89,7 +87,7 @@ def _build_mock_orchestrator():
 
 
 def _build_mock_pipeline_service():
-    from app.api.schemas.pipeline import PipelineRunResponse, PipelineStatusResponse
+    from app.api.schemas.pipeline import PipelineRunResponse
 
     svc = MagicMock()
     svc.run_pipeline = AsyncMock(

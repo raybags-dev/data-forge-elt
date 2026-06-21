@@ -5,18 +5,18 @@ from __future__ import annotations
 import os
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from shared.exceptions import ConfigError, DownloadError
+from shared.exceptions import ConfigError
 from shared.notifier import NotificationLevel, NotificationPayload
 from shared.retry import network_retry
 
 if TYPE_CHECKING:
-    from config.settings import Settings
     from loguru import Logger
 
+    from config.settings import Settings
     from shared.notifier import Notifier
 
 from ingestion.kaggle.converter import CsvToParquetConverter
@@ -34,9 +34,9 @@ class KaggleDownloader:
 
     def __init__(
         self,
-        settings: "Settings",
-        notifier: "Notifier",
-        logger: "Logger",
+        settings: Settings,
+        notifier: Notifier,
+        logger: Logger,
     ) -> None:
         self._settings = settings
         self._notifier = notifier
@@ -112,7 +112,7 @@ class KaggleDownloader:
             DownloadResult with paths, row counts, and status.
         """
         start = time.monotonic()
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S")
+        timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
         dest_dir = (
             Path(self._settings.data_lake)
             / "raw"

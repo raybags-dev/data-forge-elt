@@ -177,7 +177,7 @@ class PipelineMetricsCollector:
             "extra": m.extra,
         }
 
-    def log_summary(self, log: "Logger") -> None:
+    def log_summary(self, log: Logger) -> None:
         """Log all metric fields at INFO level.
 
         Args:

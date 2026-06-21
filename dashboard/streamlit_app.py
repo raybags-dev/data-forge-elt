@@ -7,6 +7,7 @@ warehouse tables, dbt results, and log streaming.
 from __future__ import annotations
 
 import os
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -138,9 +139,9 @@ def _compute_kpis(runs: list[dict], datasets: list[dict]) -> dict:
     last_run = runs[0].get("started_at", "—") if runs else "—"
 
     # Freshness: ratio of datasets updated in last 24 h
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fresh = 0
     for d in datasets:
         updated = d.get("updated_at") or d.get("created_at")

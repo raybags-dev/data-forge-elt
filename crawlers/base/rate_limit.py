@@ -66,7 +66,7 @@ class RateLimiter:
             self._tokens -= 1.0
 
 
-def build_rate_limiter(settings: "Settings") -> RateLimiter:
+def build_rate_limiter(settings: Settings) -> RateLimiter:
     """Factory that constructs a :class:`RateLimiter` from application settings.
 
     Args:

@@ -24,7 +24,7 @@ class PipelineScheduler:
         orchestrator: PipelineOrchestrator used to execute scheduled runs.
     """
 
-    def __init__(self, orchestrator: "PipelineOrchestrator") -> None:
+    def __init__(self, orchestrator: PipelineOrchestrator) -> None:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         self._orchestrator = orchestrator
@@ -44,7 +44,7 @@ class PipelineScheduler:
             self._log.info("PipelineScheduler stopped")
 
     def schedule_pipeline(
-        self, config: "PipelineConfig", cron_expr: str
+        self, config: PipelineConfig, cron_expr: str
     ) -> str:
         """Add a cron-triggered pipeline job.
 
@@ -105,7 +105,7 @@ class PipelineScheduler:
             for job in jobs
         ]
 
-    def _run_pipeline(self, config: "PipelineConfig") -> None:
+    def _run_pipeline(self, config: PipelineConfig) -> None:
         """Callback invoked by APScheduler on each cron trigger.
 
         Args:
@@ -133,4 +133,4 @@ class PipelineScheduler:
                 f"Expected 5-field cron expression, got {len(parts)} fields: '{cron_expr}'"
             )
         keys = ["minute", "hour", "day", "month", "day_of_week"]
-        return dict(zip(keys, parts))
+        return dict(zip(keys, parts, strict=True))

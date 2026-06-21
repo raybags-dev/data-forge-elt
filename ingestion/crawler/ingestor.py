@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,7 +26,7 @@ class CrawlerIngestor:
         logger: Loguru Logger instance.
     """
 
-    def __init__(self, lake_manager: "DataLakeManager", logger: "Logger") -> None:
+    def __init__(self, lake_manager: DataLakeManager, logger: Logger) -> None:
         self._lake = lake_manager
         self._log = logger
 

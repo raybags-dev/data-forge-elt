@@ -15,9 +15,9 @@ from shared.logger import get_logger
 from shared.notifier import NotificationLevel, NotificationPayload
 
 if TYPE_CHECKING:
-    from config.settings import Settings
     from loguru import Logger
 
+    from config.settings import Settings
     from datalake.manager import DataLakeManager
     from shared.notifier import Notifier
     from warehouse.duckdb.warehouse import DuckDBWarehouse
@@ -63,10 +63,10 @@ class CrawlStep(PipelineStep):
 
     def __init__(
         self,
-        settings: "Settings",
-        lake: "DataLakeManager",
+        settings: Settings,
+        lake: DataLakeManager,
         sources: list[str],
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._settings = settings
         self._lake = lake
@@ -108,10 +108,10 @@ class KaggleStep(PipelineStep):
 
     def __init__(
         self,
-        settings: "Settings",
-        lake: "DataLakeManager",
+        settings: Settings,
+        lake: DataLakeManager,
         datasets: list[str],
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._settings = settings
         self._lake = lake
@@ -153,9 +153,9 @@ class DataLakeStep(PipelineStep):
 
     def __init__(
         self,
-        lake: "DataLakeManager",
+        lake: DataLakeManager,
         sources: list[str],
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._lake = lake
         self._sources = sources
@@ -170,7 +170,6 @@ class DataLakeStep(PipelineStep):
         Returns:
             Context with 'lake_output_paths' key populated.
         """
-        import pandas as pd
 
         output_paths: list[str] = []
 
@@ -206,10 +205,10 @@ class WarehouseLoadStep(PipelineStep):
 
     def __init__(
         self,
-        warehouse: "DuckDBWarehouse",
-        lake: "DataLakeManager",
+        warehouse: DuckDBWarehouse,
+        lake: DataLakeManager,
         sources: list[str],
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._warehouse = warehouse
         self._lake = lake
@@ -257,9 +256,9 @@ class DbtBuildStep(PipelineStep):
 
     def __init__(
         self,
-        settings: "Settings",
+        settings: Settings,
         select: str | None = None,
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._settings = settings
         self._select = select
@@ -328,9 +327,9 @@ class DbtTestStep(PipelineStep):
 
     def __init__(
         self,
-        settings: "Settings",
+        settings: Settings,
         select: str | None = None,
-        logger: "Logger | None" = None,
+        logger: Logger | None = None,
     ) -> None:
         self._settings = settings
         self._select = select
@@ -391,8 +390,8 @@ class DbtDocsStep(PipelineStep):
 
     def __init__(
         self,
-        settings: "Settings",
-        logger: "Logger | None" = None,
+        settings: Settings,
+        logger: Logger | None = None,
     ) -> None:
         self._settings = settings
         self._log = logger or get_logger(__name__)
@@ -449,8 +448,8 @@ class NotifyStep(PipelineStep):
 
     def __init__(
         self,
-        notifier: "Notifier",
-        logger: "Logger | None" = None,
+        notifier: Notifier,
+        logger: Logger | None = None,
     ) -> None:
         self._notifier = notifier
         self._log = logger or get_logger(__name__)

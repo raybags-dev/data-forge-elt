@@ -6,7 +6,8 @@ classes such as ``.thing``, ``.title``, ``.author``, and ``.score``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import contextlib
+from datetime import datetime
 from typing import Any
 
 from bs4 import BeautifulSoup, Tag
@@ -101,12 +102,10 @@ class RedditParser:
         time_el = el.select_one("time")
         created_utc: datetime | None = None
         if time_el and time_el.get("datetime"):
-            try:
+            with contextlib.suppress(ValueError):
                 created_utc = datetime.fromisoformat(
                     str(time_el["datetime"]).replace("Z", "+00:00")
                 )
-            except ValueError:
-                pass
 
         return RedditPost(
             id=str(post_id),

@@ -29,8 +29,8 @@ def get_settings_dep() -> Settings:
     return _cached_settings()
 
 
-# Re-export as the canonical name expected by routers
-get_settings = get_settings_dep
+# Alias used by routers that import get_settings directly from this module
+get_settings_alias = get_settings_dep
 
 
 def get_notifier(settings: Settings = Depends(get_settings_dep)):

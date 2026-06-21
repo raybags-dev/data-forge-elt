@@ -6,26 +6,23 @@ abstract methods: :meth:`fetch`, :meth:`parse`, and :meth:`validate`.
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
-from datetime import timezone, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from shared.exceptions import CrawlError
 from shared.logger import get_logger
 from shared.utils import ensure_directory, slugify, timestamp_str
 
 if TYPE_CHECKING:
     from loguru import Logger
 
-    from config.settings import Settings
     from crawlers.base.browser import BrowserManager
-    from crawlers.base.models import CrawledPage, CrawlResult, CrawlerProfile
+    from crawlers.base.models import CrawledPage, CrawlerProfile, CrawlResult
     from crawlers.base.rate_limit import RateLimiter
-    from shared.notifier import NotificationLevel, NotificationPayload, Notifier
+    from shared.notifier import Notifier
 
 _log = get_logger(__name__)
 
@@ -47,11 +44,11 @@ class BaseCrawler(ABC):
 
     def __init__(
         self,
-        profile: "CrawlerProfile",
-        browser_manager: "BrowserManager",
-        rate_limiter: "RateLimiter",
-        notifier: "Notifier",
-        logger: "Logger",
+        profile: CrawlerProfile,
+        browser_manager: BrowserManager,
+        rate_limiter: RateLimiter,
+        notifier: Notifier,
+        logger: Logger,
     ) -> None:
         self.profile = profile
         self._browser = browser_manager
@@ -62,7 +59,7 @@ class BaseCrawler(ABC):
     # ── Abstract interface ────────────────────────────────────────────────────
 
     @abstractmethod
-    async def fetch(self, url: str) -> "CrawledPage":
+    async def fetch(self, url: str) -> CrawledPage:
         """Fetch *url* and return a :class:`CrawledPage`.
 
         Args:
@@ -70,7 +67,7 @@ class BaseCrawler(ABC):
         """
 
     @abstractmethod
-    def parse(self, page: "CrawledPage") -> list[dict[str, Any]]:
+    def parse(self, page: CrawledPage) -> list[dict[str, Any]]:
         """Extract raw records from *page*.
 
         Args:
@@ -93,7 +90,7 @@ class BaseCrawler(ABC):
 
     # ── Concrete helpers ──────────────────────────────────────────────────────
 
-    def start(self) -> "CrawlResult":
+    def start(self) -> CrawlResult:
         """Create and return an initial :class:`CrawlResult` in RUNNING state."""
         from crawlers.base.models import CrawlResult, CrawlStatus
 
@@ -101,7 +98,7 @@ class BaseCrawler(ABC):
         return CrawlResult(
             profile_name=self.profile.name,
             status=CrawlStatus.RUNNING,
-            started_at=datetime.now(tz=timezone.utc),
+            started_at=datetime.now(tz=UTC),
         )
 
     def clean(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -143,7 +140,7 @@ class BaseCrawler(ABC):
         )
         return len(df)
 
-    def finish(self, result: "CrawlResult") -> "CrawlResult":
+    def finish(self, result: CrawlResult) -> CrawlResult:
         """Mark *result* as finished, stop the browser, and send a notification.
 
         Args:
@@ -155,7 +152,7 @@ class BaseCrawler(ABC):
         from crawlers.base.models import CrawlStatus
         from shared.notifier import NotificationLevel, NotificationPayload
 
-        result.ended_at = datetime.now(tz=timezone.utc)
+        result.ended_at = datetime.now(tz=UTC)
         if result.status == CrawlStatus.RUNNING:
             result.status = CrawlStatus.SUCCESS if not result.errors else CrawlStatus.FAILED
 
@@ -210,7 +207,7 @@ class BaseCrawler(ABC):
 
     async def crawl(
         self, urls: list[str], output_path: Path
-    ) -> "CrawlResult":
+    ) -> CrawlResult:
         """Orchestrate the full crawl pipeline over *urls*.
 
         For each URL: rate-limit → fetch → parse → validate → clean.  All
@@ -241,7 +238,7 @@ class BaseCrawler(ABC):
     async def _crawl_one(
         self,
         url: str,
-        result: "CrawlResult",
+        result: CrawlResult,
         all_records: list[dict[str, Any]],
     ) -> None:
         """Fetch a single *url* and accumulate parsed records into *all_records*.
@@ -272,7 +269,7 @@ class BaseCrawler(ABC):
             if self.profile.screenshot_on_failure:
                 await self._take_screenshot(url)
 
-    async def run(self, urls: list[str], output_path: Path) -> "CrawlResult":
+    async def run(self, urls: list[str], output_path: Path) -> CrawlResult:
         """Public entry point — calls :meth:`crawl` with top-level error handling.
 
         Args:
@@ -291,5 +288,5 @@ class BaseCrawler(ABC):
             result = self.start()
             result.status = CrawlStatus.FAILED
             result.errors.append(str(exc))
-            result.ended_at = datetime.now(tz=timezone.utc)
+            result.ended_at = datetime.now(tz=UTC)
             return result

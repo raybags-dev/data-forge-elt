@@ -10,9 +10,8 @@ Targets common news site conventions:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
 

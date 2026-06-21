@@ -2,24 +2,22 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from crawlers.base.models import CrawledPage, CrawlResult, CrawlStatus, CrawlerProfile
+from crawlers.base.models import CrawledPage, CrawlerProfile, CrawlResult, CrawlStatus
 from crawlers.base.pagination import CursorStrategy, NoPagination, PageNumberStrategy
 from crawlers.base.rate_limit import RateLimiter
 from crawlers.base.robots import RobotsChecker
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _utc_now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _make_page(url: str = "https://example.com", html: str = "") -> CrawledPage:
@@ -86,7 +84,6 @@ async def test_robots_checker_disabled_allows_all() -> None:
 @pytest.mark.asyncio
 async def test_robots_checker_fails_open() -> None:
     """On network error fetching robots.txt, checker should allow the URL."""
-    from unittest.mock import AsyncMock
 
     checker = RobotsChecker(enabled=True)
     # Patch the AsyncClient so its __aenter__ returns a mock whose .get raises

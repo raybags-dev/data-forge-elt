@@ -7,8 +7,6 @@ elements such as ``#appHubAppName``, ``.game_description_snippet``, and
 
 from __future__ import annotations
 
-from typing import Any
-
 from bs4 import BeautifulSoup, Tag
 
 from crawlers.base.models import CrawledPage

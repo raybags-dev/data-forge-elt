@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from shared.logger import get_logger
-
 from orchestration.models import PipelineConfig
+from shared.logger import get_logger
 
 _log = get_logger(__name__)
 

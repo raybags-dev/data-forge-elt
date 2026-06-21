@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from shared.logger import get_logger
-
 from app.api.schemas.pipeline import PipelineRunResponse, PipelineStatusResponse
 from orchestration.models import PipelineConfig, PipelineRun, PipelineStepModel
+from shared.logger import get_logger
 
 if TYPE_CHECKING:
     from orchestration.pipeline import PipelineOrchestrator
@@ -20,7 +19,7 @@ class PipelineService:
         orchestrator: PipelineOrchestrator that executes the runs.
     """
 
-    def __init__(self, orchestrator: "PipelineOrchestrator") -> None:
+    def __init__(self, orchestrator: PipelineOrchestrator) -> None:
         self._orchestrator = orchestrator
         self._log = get_logger(__name__)
 

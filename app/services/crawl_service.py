@@ -5,9 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from shared.logger import get_logger
-
 from app.api.schemas.crawl import CrawlResponse
+from shared.logger import get_logger
 
 if TYPE_CHECKING:
     from config.settings import Settings
@@ -26,9 +25,9 @@ class CrawlService:
 
     def __init__(
         self,
-        settings: "Settings",
-        notifier: "Notifier",
-        lake: "DataLakeManager",
+        settings: Settings,
+        notifier: Notifier,
+        lake: DataLakeManager,
     ) -> None:
         self._settings = settings
         self._notifier = notifier
