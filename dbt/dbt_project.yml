@@ -1,0 +1,46 @@
+name: dataforge
+version: '1.0.0'
+config-version: 2
+
+profile: dataforge
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dataforge:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      core:
+        +materialized: table
+        +schema: marts
+      analytics:
+        +materialized: table
+        +schema: analytics
+    incremental:
+      +materialized: incremental
+      +schema: incremental
+
+seeds:
+  dataforge:
+    +schema: seeds
+
+snapshots:
+  dataforge:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at

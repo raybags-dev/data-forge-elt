@@ -1,0 +1,56 @@
+# DataForge ELT — local development stack
+# Usage: docker compose up --build
+# API: http://localhost:8002  |  Streamlit: http://localhost:8501  |  UI: http://localhost:8503
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8002:8002"
+    volumes:
+      - ../datalake:/app/datalake
+      - ../warehouse:/app/warehouse
+      - ../logs:/app/logs
+      - ../dbt:/app/dbt
+    env_file: ../.env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks: [dataforge]
+
+  streamlit:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../datalake:/app/datalake
+      - ../warehouse:/app/warehouse
+      - ../logs:/app/logs
+    env_file: ../.env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [dataforge]
+
+  ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+      args:
+        VITE_API_BASE_URL: http://localhost:8002
+    ports:
+      - "8503:8503"
+    depends_on:
+      - api
+    networks: [dataforge]
+
+networks:
+  dataforge:
+    driver: bridge

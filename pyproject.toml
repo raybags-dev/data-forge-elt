@@ -1,0 +1,60 @@
+[project]
+name = "dataforge-elt"
+version = "0.1.0"
+description = "DataForge — production-quality ELT pipeline with Playwright crawlers, DuckDB warehouse, and dbt transformations"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7.0",
+    "tenacity>=9.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.2.0",
+    "playwright>=1.40.0",
+    "pandas>=2.1.0",
+    "pyarrow>=14.0.0",
+    "duckdb>=0.10.0",
+    "dbt-core>=1.8.0",
+    "dbt-duckdb>=1.8.0",
+    "kaggle>=1.6.0",
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "streamlit>=1.35.0",
+    "pandera>=0.19.0",
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+    "requests>=2.31.0",
+    "discord-webhook>=1.3.0",
+    "python-dotenv>=1.0.0",
+    "boto3>=1.34.0",
+    "rich>=13.7.0",
+    "typer>=0.12.0",
+    "apscheduler>=3.10.0",
+    "beautifulsoup4>=4.15.0",
+    "lxml>=6.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+    "black>=24.0.0",
+    "httpx>=0.27.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]

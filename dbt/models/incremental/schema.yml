@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: incr_content_events
+    description: >
+      Append-only event log of content items loaded into the warehouse.
+      Uses the is_incremental() guard to process only new records on
+      subsequent runs. Full refresh rebuilds the entire history.
+    columns:
+      - name: event_id
+        description: "Surrogate key: MD5(content_id || loaded_at)"
+        tests:
+          - unique
+          - not_null
+      - name: content_id
+        description: "Surrogate key from int_content_unified"
+        tests:
+          - not_null
+      - name: source_name
+        description: "Data source identifier"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['reddit', 'steam', 'imdb', 'news']
+      - name: natural_key
+        description: "Source-system primary key"
+      - name: title
+        description: "Content title at time of event"
+      - name: score
+        description: "Score at time of event"
+      - name: created_at
+        description: "Original content creation timestamp"
+      - name: loaded_at
+        description: "Warehouse ingestion timestamp (event time)"
+        tests:
+          - not_null
+      - name: event_date
+        description: "Calendar date of the event (derived from loaded_at)"
+      - name: dbt_run_at
+        description: "Timestamp of the dbt run that created this row"

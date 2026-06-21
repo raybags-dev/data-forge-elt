@@ -1,0 +1,108 @@
+version: 2
+
+models:
+  - name: int_reddit_posts_enriched
+    description: >
+      Reddit posts enriched with derived engagement metrics and
+      content classification from seed reference data.
+    columns:
+      - name: id
+        description: "Unique Reddit post ID"
+        tests:
+          - unique
+          - not_null
+      - name: title
+        description: "Normalized post title"
+        tests:
+          - not_null
+      - name: author
+        description: "Reddit username"
+      - name: subreddit
+        description: "Source subreddit"
+      - name: score
+        description: "Net upvote score"
+      - name: num_comments
+        description: "Comment count"
+      - name: url
+        description: "Post URL"
+      - name: created_at
+        description: "Post creation timestamp"
+      - name: body
+        description: "Cleaned post body text"
+      - name: loaded_at
+        description: "Warehouse load timestamp"
+      - name: engagement_tier
+        description: "Engagement classification: high / medium / low"
+      - name: is_popular
+        description: "True when score >= 1000"
+      - name: category
+        description: "Content category from seed reference"
+      - name: subcategory
+        description: "Content subcategory from seed reference"
+
+  - name: int_steam_games_enriched
+    description: >
+      Steam games enriched with price tiers, rating normalisation,
+      and category metadata from seed reference data.
+    columns:
+      - name: app_id
+        description: "Steam application ID"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Normalized game title"
+      - name: price
+        description: "Price in USD"
+      - name: rating
+        description: "Review rating label"
+      - name: genres
+        description: "Genre tags"
+      - name: developer
+        description: "Developer studio"
+      - name: release_date
+        description: "Release date"
+      - name: loaded_at
+        description: "Warehouse load timestamp"
+      - name: price_tier
+        description: "Price classification: free / budget / mid / premium"
+      - name: is_free
+        description: "True when price is 0 or null"
+      - name: category
+        description: "Content category from seed reference"
+      - name: subcategory
+        description: "Content subcategory from seed reference"
+
+  - name: int_content_unified
+    description: >
+      Union of all staging sources with a normalised common schema.
+      Used as the single input for fact table construction.
+    columns:
+      - name: content_id
+        description: "Surrogate key: MD5(source_name || '|' || natural_key)"
+        tests:
+          - unique
+          - not_null
+      - name: source_name
+        description: "Origin source: reddit | steam | imdb | news"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['reddit', 'steam', 'imdb', 'news']
+      - name: natural_key
+        description: "Source-system primary key (id, app_id, or url)"
+      - name: title
+        description: "Normalized content title"
+      - name: author
+        description: "Content author or developer"
+      - name: score
+        description: "Numeric relevance or rating score"
+      - name: created_at
+        description: "Original content creation timestamp"
+      - name: url
+        description: "Canonical content URL"
+      - name: body
+        description: "Text body with HTML removed"
+      - name: loaded_at
+        description: "Warehouse load timestamp"

@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Python: lint + tests ────────────────────────────────────────────────────
+  test:
+    name: Tests (Python 3.13)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Pytest
+        env:
+          APP_NAME: DataForge-CI
+          SECRET_KEY: ci-secret-key-0000000000000000000000000000000000
+          DATA_LAKE: /tmp/ci-datalake
+          DUCKDB_PATH: /tmp/ci.duckdb
+          LOG_DIR: /tmp/ci-logs
+        run: uv run pytest tests/ -q --tb=short --cov=. --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  # ── dbt: parse + deps ───────────────────────────────────────────────────────
+  dbt-validate:
+    name: dbt parse & deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.13"
+
+      - run: uv sync
+
+      - name: dbt deps
+        run: uv run dbt deps --project-dir dbt --profiles-dir dbt
+
+      - name: dbt parse (syntax check)
+        run: uv run dbt parse --project-dir dbt --profiles-dir dbt
+
+  # ── React UI: typecheck + build ─────────────────────────────────────────────
+  ui-build:
+    name: React UI build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/ui/package-lock.json
+
+      - name: Install
+        working-directory: app/ui
+        run: npm ci || npm install
+
+      - name: Build
+        working-directory: app/ui
+        run: npm run build
+
+  # ── Docker: verify images build ─────────────────────────────────────────────
+  docker-build:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t dataforge-api:ci -f docker/Dockerfile.api .
+
+      - name: Build Streamlit image
+        run: docker build -t dataforge-streamlit:ci -f docker/Dockerfile.streamlit .

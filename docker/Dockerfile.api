@@ -1,0 +1,28 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uv
+
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --no-dev
+
+RUN uv run playwright install --with-deps chromium
+
+COPY . .
+
+RUN mkdir -p logs/screenshots datalake/raw datalake/bronze datalake/silver datalake/gold warehouse
+
+EXPOSE 8002
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS http://localhost:8002/health || exit 1
+
+CMD ["uv", "run", "uvicorn", "app.main:create_app", "--factory", \
+     "--host", "0.0.0.0", "--port", "8002", "--workers", "2", \
+     "--proxy-headers", "--forwarded-allow-ips=*"]

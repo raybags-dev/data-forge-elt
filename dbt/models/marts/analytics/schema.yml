@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: rpt_top_content_by_source
+    description: >
+      Top 10 content items per source ranked by score.
+      Built with a window function — ideal for leaderboard dashboards.
+    columns:
+      - name: content_id
+        description: "Surrogate key for the content item"
+        tests:
+          - not_null
+      - name: source_name
+        description: "Data source identifier"
+        tests:
+          - not_null
+      - name: natural_key
+        description: "Source-system primary key"
+      - name: title
+        description: "Content title"
+      - name: author
+        description: "Content author"
+      - name: score
+        description: "Engagement or rating score"
+      - name: created_at
+        description: "Content creation timestamp"
+      - name: url
+        description: "Canonical content URL"
+      - name: rank_within_source
+        description: "Rank position (1 = highest score) within the source"
+        tests:
+          - not_null
+          - positive_score:
+              column_name: rank_within_source
+
+  - name: rpt_content_freshness
+    description: >
+      Freshness summary per source: latest ingestion timestamp,
+      hours since last load, and row count. Used for pipeline monitoring.
+    columns:
+      - name: source_name
+        description: "Data source identifier"
+        tests:
+          - unique
+          - not_null
+      - name: latest_loaded_at
+        description: "Most recent warehouse ingestion timestamp"
+      - name: hours_since_last_load
+        description: "Hours elapsed since the latest load (rounded)"
+      - name: total_records
+        description: "Total content records for this source"
+      - name: records_last_24h
+        description: "Records ingested in the last 24 hours"
+      - name: freshness_status
+        description: "Status label: fresh / stale / critical"
+
+  - name: rpt_daily_ingestion_summary
+    description: >
+      Daily ingestion volume rolled up across all sources.
+      Shows content published per day with cross-source comparison.
+    columns:
+      - name: activity_date
+        description: "Calendar date"
+        tests:
+          - unique
+          - not_null
+      - name: total_content
+        description: "Total content items across all sources for this date"
+      - name: reddit_count
+        description: "Reddit posts published on this date"
+      - name: steam_count
+        description: "Steam games released on this date"
+      - name: imdb_count
+        description: "IMDb titles released on this date"
+      - name: news_count
+        description: "News articles published on this date"
+      - name: avg_score_all
+        description: "Average score across all sources for this date"
+      - name: dominant_source
+        description: "Source with the most content on this date"

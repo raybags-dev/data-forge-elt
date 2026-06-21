@@ -1,0 +1,263 @@
+version: 2
+
+sources:
+  - name: raw_reddit
+    description: "Raw Reddit posts ingested by the Playwright crawler"
+    schema: main
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    loaded_at_field: loaded_at
+    tables:
+      - name: reddit_posts
+        description: "Raw Reddit posts collected from subreddits"
+        columns:
+          - name: id
+            description: "Unique Reddit post ID (t3_ prefix stripped)"
+            tests:
+              - unique
+              - not_null
+          - name: title
+            description: "Post title text"
+            tests:
+              - not_null
+          - name: author
+            description: "Reddit username of post author"
+          - name: subreddit
+            description: "Subreddit the post belongs to"
+            tests:
+              - not_null
+          - name: score
+            description: "Net upvote score at time of collection"
+          - name: num_comments
+            description: "Comment count at time of collection"
+          - name: url
+            description: "Canonical URL of the post"
+          - name: created_utc
+            description: "Unix timestamp of post creation (UTC)"
+            tests:
+              - not_null
+          - name: text
+            description: "Post selftext body (HTML may be present)"
+          - name: loaded_at
+            description: "Timestamp when the record was loaded into the warehouse"
+
+  - name: raw_steam
+    description: "Raw Steam game catalog data ingested by the crawler"
+    schema: main
+    freshness:
+      warn_after: {count: 48, period: hour}
+      error_after: {count: 96, period: hour}
+    loaded_at_field: loaded_at
+    tables:
+      - name: steam_games
+        description: "Steam game listings with pricing and metadata"
+        columns:
+          - name: app_id
+            description: "Steam application ID (primary key)"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Game title"
+            tests:
+              - not_null
+          - name: price
+            description: "Current price in USD (0 for free-to-play)"
+          - name: rating
+            description: "Overall review rating label"
+          - name: genres
+            description: "Comma-separated genre tags"
+          - name: developer
+            description: "Developer studio name"
+          - name: release_date
+            description: "Game release date"
+          - name: loaded_at
+            description: "Timestamp when the record was loaded into the warehouse"
+
+  - name: raw_imdb
+    description: "Raw IMDb title data ingested by the crawler"
+    schema: main
+    freshness:
+      warn_after: {count: 72, period: hour}
+      error_after: {count: 144, period: hour}
+    loaded_at_field: loaded_at
+    tables:
+      - name: imdb_titles
+        description: "IMDb title entries (movies, series)"
+        columns:
+          - name: id
+            description: "IMDb title ID (tt prefix)"
+            tests:
+              - unique
+              - not_null
+          - name: title
+            description: "Primary display title"
+            tests:
+              - not_null
+          - name: year
+            description: "Release year"
+          - name: rating
+            description: "IMDb weighted average rating (0–10)"
+          - name: votes
+            description: "Number of user ratings"
+          - name: genres
+            description: "Comma-separated genre list"
+          - name: type
+            description: "Title type: movie, tvSeries, short, etc."
+          - name: url
+            description: "IMDb canonical URL"
+          - name: loaded_at
+            description: "Timestamp when the record was loaded into the warehouse"
+
+  - name: raw_news
+    description: "Raw news article data ingested by the crawler"
+    schema: main
+    freshness:
+      warn_after: {count: 2, period: hour}
+      error_after: {count: 6, period: hour}
+    loaded_at_field: loaded_at
+    tables:
+      - name: news_articles
+        description: "News articles from aggregator feeds"
+        columns:
+          - name: url
+            description: "Canonical article URL (primary key)"
+            tests:
+              - unique
+              - not_null
+          - name: title
+            description: "Article headline"
+            tests:
+              - not_null
+          - name: author
+            description: "Byline author name"
+          - name: source
+            description: "Publisher or originating outlet name"
+          - name: score
+            description: "Community or editorial relevance score"
+          - name: published_at
+            description: "Article publication timestamp"
+            tests:
+              - not_null
+          - name: body
+            description: "Article body text (may contain HTML)"
+          - name: loaded_at
+            description: "Timestamp when the record was loaded into the warehouse"
+
+models:
+  - name: stg_reddit_posts
+    description: "Cleaned and standardized Reddit posts ready for transformation"
+    columns:
+      - name: id
+        description: "Unique Reddit post ID"
+        tests:
+          - unique
+          - not_null
+      - name: title
+        description: "Normalized post title (lowercase, stripped punctuation)"
+        tests:
+          - not_null
+      - name: author
+        description: "Reddit username of post author"
+      - name: subreddit
+        description: "Subreddit the post belongs to"
+        tests:
+          - not_null
+      - name: score
+        description: "Net upvote score"
+      - name: num_comments
+        description: "Comment count"
+      - name: url
+        description: "Canonical post URL"
+      - name: created_at
+        description: "Post creation timestamp (UTC)"
+        tests:
+          - not_null
+          - not_future_date:
+              column_name: created_at
+      - name: body
+        description: "Post body text with HTML stripped"
+      - name: loaded_at
+        description: "Warehouse load timestamp"
+
+  - name: stg_steam_games
+    description: "Cleaned and standardized Steam game records"
+    columns:
+      - name: app_id
+        description: "Steam application ID"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Normalized game title"
+        tests:
+          - not_null
+      - name: price
+        description: "Game price in USD"
+      - name: rating
+        description: "Review rating label"
+      - name: genres
+        description: "Trimmed genre tags"
+      - name: developer
+        description: "Developer studio name"
+      - name: release_date
+        description: "Release date (cast to DATE)"
+      - name: loaded_at
+        description: "Warehouse load timestamp"
+
+  - name: stg_imdb_titles
+    description: "Cleaned and standardized IMDb title records"
+    columns:
+      - name: id
+        description: "IMDb title ID"
+        tests:
+          - unique
+          - not_null
+      - name: title
+        description: "Normalized display title"
+        tests:
+          - not_null
+      - name: year
+        description: "Release year (integer)"
+      - name: rating
+        description: "IMDb weighted rating (0–10)"
+      - name: votes
+        description: "Number of user votes"
+      - name: genres
+        description: "Genre list"
+      - name: type
+        description: "Title type classification"
+      - name: url
+        description: "IMDb canonical URL"
+      - name: loaded_at
+        description: "Warehouse load timestamp"
+
+  - name: stg_news_articles
+    description: "Cleaned and standardized news article records"
+    columns:
+      - name: url
+        description: "Canonical article URL"
+        tests:
+          - unique
+          - not_null
+      - name: title
+        description: "Normalized article headline"
+        tests:
+          - not_null
+      - name: author
+        description: "Byline author"
+      - name: source
+        description: "Publishing outlet"
+      - name: score
+        description: "Relevance score"
+      - name: published_at
+        description: "Article publication timestamp"
+        tests:
+          - not_null
+          - not_future_date:
+              column_name: published_at
+      - name: body
+        description: "Article body with HTML stripped"
+      - name: loaded_at
+        description: "Warehouse load timestamp"

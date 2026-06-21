@@ -1,0 +1,247 @@
+name: Deploy
+
+# Runs on every push to main.
+# Pipeline: test → build & push ghcr.io images → SSH deploy to Hetzner VPS.
+#
+# ── Required GitHub Actions secrets (Settings → Secrets → Actions) ──────────
+# SSH_HOST                 VPS IP: 89.167.74.127
+# SSH_USER                 SSH login user: root
+# SSH_KEY                  Private SSH key (raybags_ci_deploy)
+# SSH_PORT                 22 (optional, defaults to 22)
+# APP_SECRET_KEY           DataForge SECRET_KEY (production value)
+# SUPABASE_URL             https://hxkxoduptzlbdkgpdstp.supabase.co
+# SUPABASE_SERVICE_KEY     Supabase service role JWT
+# SUPABASE_BUCKET          dataforge-elt-bucket
+# DATABASE_URL             Supabase Postgres URL (dataforge schema)
+# MONGODB_URL              MongoDB Atlas connection string
+# MONGODB_DB               dataforge_elt
+# AWS_ACCESS_KEY_ID        AWS access key
+# AWS_SECRET_ACCESS_KEY    AWS secret key
+# AWS_REGION               eu-central-1
+# AWS_S3_BUCKET            dataforge-elt-storage
+# KAGGLE_USERNAME          raymondbaguma
+# KAGGLE_KEY               Kaggle API key
+# GROQ_API_KEY             Groq API key
+# DISCORD_WEBHOOK          (optional) Discord webhook URL
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-api
+  STREAMLIT_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-streamlit
+  UI_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-ui
+
+jobs:
+  # ── 1. Tests ──────────────────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.13"
+
+      - run: uv sync --extra dev
+
+      - run: uv run playwright install --with-deps chromium
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Pytest
+        env:
+          APP_NAME: DataForge-CI
+          SECRET_KEY: ci-secret-000000000000000000000000000000000000
+          DATA_LAKE: /tmp/ci-datalake
+          DUCKDB_PATH: /tmp/ci.duckdb
+          LOG_DIR: /tmp/ci-logs
+        run: uv run pytest tests/ -q --tb=short
+
+  # ── 2. Build & push images to ghcr.io ────────────────────────────────────
+  docker-publish:
+    name: Build & push images
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Build & push Streamlit
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.streamlit
+          push: true
+          tags: |
+            ${{ env.STREAMLIT_IMAGE }}:latest
+            ${{ env.STREAMLIT_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=streamlit
+          cache-to: type=gha,scope=streamlit,mode=max
+
+      - name: Build & push UI
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.ui
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=http://89.167.74.127:8002
+          tags: |
+            ${{ env.UI_IMAGE }}:latest
+            ${{ env.UI_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,scope=ui,mode=max
+
+  # ── 3. Deploy to Hetzner VPS ─────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS (89.167.74.127)
+    needs: [docker-publish]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_OWNER: ${{ github.repository_owner }}
+          IMAGE_TAG: ${{ github.sha }}
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MONGODB_URL: ${{ secrets.MONGODB_URL }}
+          MONGODB_DB: ${{ secrets.MONGODB_DB }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: GHCR_OWNER,IMAGE_TAG,APP_SECRET_KEY,SUPABASE_URL,SUPABASE_SERVICE_KEY,SUPABASE_BUCKET,DATABASE_URL,MONGODB_URL,MONGODB_DB,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,AWS_S3_BUCKET,KAGGLE_USERNAME,KAGGLE_KEY,GROQ_API_KEY,DISCORD_WEBHOOK,GITHUB_TOKEN
+          command_timeout: 30m
+          script: |
+            set -e
+            APP_DIR=/opt/dataforge-elt
+            DATA_DIR=/mnt/portfolio-data/dataforge
+            mkdir -p "$APP_DIR" "$DATA_DIR"/{datalake/{raw,bronze,silver,gold},warehouse,logs/screenshots,dbt-target}
+
+            # Write .env.prod with all secrets
+            cat > "$APP_DIR/.env.prod" <<ENVEOF
+            APP_NAME=DataForge
+            DEBUG=false
+            ENVIRONMENT=production
+            SECRET_KEY=${APP_SECRET_KEY}
+            ACCESS_TOKEN_EXPIRE_MINUTES=720
+            LOG_LEVEL=INFO
+            LOG_DIR=${DATA_DIR}/logs
+            LOG_ROTATION=10 MB
+            LOG_RETENTION=30 days
+            DATA_LAKE=${DATA_DIR}/datalake
+            DUCKDB_PATH=${DATA_DIR}/warehouse/data.duckdb
+            DBT_PROJECT_DIR=/app/dbt
+            DBT_PROFILES_DIR=/app/dbt
+            CRAWLER_TIMEOUT=60
+            HEADLESS=true
+            MAX_RETRIES=3
+            RATE_LIMIT_RPS=0.5
+            ROBOTS_TXT_COMPLIANCE=true
+            SCREENSHOT_ON_FAILURE=true
+            SCREENSHOTS_DIR=${DATA_DIR}/logs/screenshots
+            DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+            KAGGLE_USERNAME=${KAGGLE_USERNAME}
+            KAGGLE_KEY=${KAGGLE_KEY}
+            AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+            AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+            AWS_REGION=${AWS_REGION}
+            AWS_S3_BUCKET=${AWS_S3_BUCKET}
+            SUPABASE_URL=${SUPABASE_URL}
+            SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+            SUPABASE_BUCKET=${SUPABASE_BUCKET}
+            DATABASE_URL=${DATABASE_URL}
+            MONGODB_URL=${MONGODB_URL}
+            MONGODB_DB=${MONGODB_DB}
+            GROQ_API_KEY=${GROQ_API_KEY}
+            ENVEOF
+
+            # Write docker-compose.prod.yml
+            cat > "$APP_DIR/docker-compose.prod.yml" <<COMPOSE_EOF
+            services:
+              api:
+                image: ghcr.io/${GHCR_OWNER}/dataforge-api:${IMAGE_TAG}
+                restart: always
+                ports:
+                  - "8002:8002"
+                volumes:
+                  - ${DATA_DIR}/datalake:/app/datalake
+                  - ${DATA_DIR}/warehouse:/app/warehouse
+                  - ${DATA_DIR}/logs:/app/logs
+                  - ${DATA_DIR}/dbt-target:/app/dbt/target
+                env_file: .env.prod
+              streamlit:
+                image: ghcr.io/${GHCR_OWNER}/dataforge-streamlit:${IMAGE_TAG}
+                restart: always
+                ports:
+                  - "8501:8501"
+                volumes:
+                  - ${DATA_DIR}/datalake:/app/datalake
+                  - ${DATA_DIR}/warehouse:/app/warehouse
+                  - ${DATA_DIR}/logs:/app/logs
+                env_file: .env.prod
+                depends_on: [api]
+              ui:
+                image: ghcr.io/${GHCR_OWNER}/dataforge-ui:${IMAGE_TAG}
+                restart: always
+                ports:
+                  - "8503:8503"
+                depends_on: [api]
+            COMPOSE_EOF
+
+            cd "$APP_DIR"
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GHCR_OWNER" --password-stdin
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+            echo "DataForge deployed — API:8002  Streamlit:8501  UI:8503"

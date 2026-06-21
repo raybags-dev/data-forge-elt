@@ -1,0 +1,74 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+.uv/
+
+# Environment secrets
+.env
+.env.prod
+.env.local
+!.env.example
+
+# DuckDB files
+*.duckdb
+*.duckdb.wal
+warehouse/*.duckdb
+
+# Data lake (large binary/data files)
+datalake/
+
+# Logs (keep placeholder)
+logs/
+!logs/.gitkeep
+
+# Test & coverage artefacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Ruff / Black caches
+.ruff_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+dist/
+
+# dbt artefacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Claude Code AI assistant files (never commit)
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large data files
+*.parquet
+*.csv
+
+# Screenshots
+screenshots/
+logs/screenshots/

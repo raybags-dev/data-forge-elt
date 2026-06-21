@@ -1,0 +1,136 @@
+version: 2
+
+models:
+  - name: dim_sources
+    description: >
+      Dimension table describing each data source. Combines seed metadata
+      with category reference data for a complete source profile.
+    columns:
+      - name: source_key
+        description: "Surrogate primary key for the source dimension"
+        tests:
+          - unique
+          - not_null
+      - name: source_name
+        description: "Short source identifier (reddit, steam, imdb, news)"
+        tests:
+          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['reddit', 'steam', 'imdb', 'news']
+      - name: display_name
+        description: "Human-readable source label"
+        tests:
+          - not_null
+      - name: base_url
+        description: "Root URL of the data source"
+      - name: crawl_frequency_hours
+        description: "How often the crawler runs for this source (hours)"
+      - name: is_active
+        description: "Whether the source is currently being crawled"
+      - name: category
+        description: "Broad content category (Social Media, Gaming, etc.)"
+      - name: subcategory
+        description: "Content subcategory"
+
+  - name: dim_content_types
+    description: >
+      Dimension describing the content type taxonomy across all sources.
+      Each source maps to exactly one content type.
+    columns:
+      - name: content_type_key
+        description: "Surrogate primary key for the content type"
+        tests:
+          - unique
+          - not_null
+      - name: source_name
+        description: "Data source identifier"
+        tests:
+          - unique
+          - not_null
+      - name: content_type
+        description: "Content type label (Post, Game, Title, Article)"
+        tests:
+          - not_null
+      - name: category
+        description: "Parent category from content_categories seed"
+      - name: subcategory
+        description: "Subcategory from content_categories seed"
+      - name: is_active
+        description: "Whether this content type is actively ingested"
+
+  - name: fct_content
+    description: >
+      Central fact table. One row per content item across all sources.
+      Joins int_content_unified to dimension tables and adds audit columns.
+    columns:
+      - name: content_key
+        description: "Surrogate fact primary key"
+        tests:
+          - unique
+          - not_null
+      - name: content_id
+        description: "Natural surrogate key from int_content_unified"
+        tests:
+          - unique
+          - not_null
+      - name: source_key
+        description: "FK to dim_sources"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_sources')
+                field: source_key
+      - name: source_name
+        description: "Data source name"
+        tests:
+          - not_null
+      - name: natural_key
+        description: "Source-system primary key"
+      - name: title
+        description: "Content title"
+      - name: author
+        description: "Content author or creator"
+      - name: score
+        description: "Numeric engagement or rating score"
+      - name: created_at
+        description: "Content creation timestamp"
+      - name: url
+        description: "Canonical content URL"
+      - name: body
+        description: "Content body text"
+      - name: loaded_at
+        description: "Warehouse ingestion timestamp"
+      - name: dbt_created_at
+        description: "Timestamp this row was created by dbt"
+
+  - name: fct_engagement_metrics
+    description: >
+      Aggregated engagement metrics rolled up by source and calendar date.
+      Supports time-series analysis and cross-source benchmarking.
+    columns:
+      - name: metric_key
+        description: "Surrogate primary key (source + date)"
+        tests:
+          - unique
+          - not_null
+      - name: source_name
+        description: "Data source name"
+        tests:
+          - not_null
+      - name: activity_date
+        description: "Calendar date of the content items"
+        tests:
+          - not_null
+      - name: content_count
+        description: "Number of content items published on this date"
+      - name: avg_score
+        description: "Average score across all items for this source/date"
+      - name: max_score
+        description: "Highest score for this source/date"
+      - name: min_score
+        description: "Lowest score for this source/date"
+      - name: total_score
+        description: "Sum of all scores for this source/date"
