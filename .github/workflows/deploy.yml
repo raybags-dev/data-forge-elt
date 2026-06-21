@@ -1,7 +1,7 @@
 name: Deploy
 
 # Runs on every push to main.
-# Pipeline: test → build & push ghcr.io images → SSH deploy to Hetzner VPS.
+# Pipeline: test → build & push Docker Hub images → SSH deploy to Hetzner VPS.
 #
 # ── Required GitHub Actions secrets (Settings → Secrets → Actions) ──────────
 # SSH_HOST                 VPS IP: 89.167.74.127
@@ -9,6 +9,8 @@ name: Deploy
 # SSH_KEY                  Private SSH key (raybags_ci_deploy)
 # SSH_PORT                 22 (optional, defaults to 22)
 # APP_SECRET_KEY           DataForge SECRET_KEY (production value)
+# DOCKERHUB_USERNAME_PERSONAL  Docker Hub username
+# DOCKERHUB_TOKEN_PERSONAL     Docker Hub access token
 # SUPABASE_URL             https://hxkxoduptzlbdkgpdstp.supabase.co
 # SUPABASE_SERVICE_KEY     Supabase service role JWT
 # SUPABASE_BUCKET          dataforge-elt-bucket
@@ -31,16 +33,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: deploy-main
   cancel-in-progress: false
-
-env:
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-api
-  STREAMLIT_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-streamlit
-  UI_IMAGE: ghcr.io/${{ github.repository_owner }}/dataforge-ui
 
 jobs:
   # ── 1. Tests ──────────────────────────────────────────────────────────────
@@ -56,7 +52,9 @@ jobs:
 
       - run: uv sync --extra dev
 
-      - run: uv run playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+        continue-on-error: true
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -70,7 +68,7 @@ jobs:
           LOG_DIR: /tmp/ci-logs
         run: uv run pytest tests/ -q --tb=short
 
-  # ── 2. Build & push images to ghcr.io ────────────────────────────────────
+  # ── 2. Build & push images to Docker Hub ─────────────────────────────────
   docker-publish:
     name: Build & push images
     needs: [test]
@@ -78,12 +76,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_PERSONAL }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -94,8 +91,8 @@ jobs:
           file: docker/Dockerfile.api
           push: true
           tags: |
-            ${{ env.API_IMAGE }}:latest
-            ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -106,8 +103,8 @@ jobs:
           file: docker/Dockerfile.streamlit
           push: true
           tags: |
-            ${{ env.STREAMLIT_IMAGE }}:latest
-            ${{ env.STREAMLIT_IMAGE }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-streamlit:latest
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-streamlit:${{ github.sha }}
           cache-from: type=gha,scope=streamlit
           cache-to: type=gha,scope=streamlit,mode=max
 
@@ -120,8 +117,8 @@ jobs:
           build-args: |
             VITE_API_BASE_URL=http://89.167.74.127:8002
           tags: |
-            ${{ env.UI_IMAGE }}:latest
-            ${{ env.UI_IMAGE }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:latest
+            ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:${{ github.sha }}
           cache-from: type=gha,scope=ui
           cache-to: type=gha,scope=ui,mode=max
 
@@ -137,7 +134,8 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          GHCR_OWNER: ${{ github.repository_owner }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_PERSONAL }}
           IMAGE_TAG: ${{ github.sha }}
           APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -154,13 +152,12 @@ jobs:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: GHCR_OWNER,IMAGE_TAG,APP_SECRET_KEY,SUPABASE_URL,SUPABASE_SERVICE_KEY,SUPABASE_BUCKET,DATABASE_URL,MONGODB_URL,MONGODB_DB,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,AWS_S3_BUCKET,KAGGLE_USERNAME,KAGGLE_KEY,GROQ_API_KEY,DISCORD_WEBHOOK,GITHUB_TOKEN
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE_TAG,APP_SECRET_KEY,SUPABASE_URL,SUPABASE_SERVICE_KEY,SUPABASE_BUCKET,DATABASE_URL,MONGODB_URL,MONGODB_DB,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,AWS_S3_BUCKET,KAGGLE_USERNAME,KAGGLE_KEY,GROQ_API_KEY,DISCORD_WEBHOOK
           command_timeout: 30m
           script: |
             set -e
@@ -210,7 +207,7 @@ jobs:
             cat > "$APP_DIR/docker-compose.prod.yml" <<COMPOSE_EOF
             services:
               api:
-                image: ghcr.io/${GHCR_OWNER}/dataforge-api:${IMAGE_TAG}
+                image: ${DOCKERHUB_USERNAME}/dataforge-api:${IMAGE_TAG}
                 restart: always
                 ports:
                   - "8002:8002"
@@ -221,7 +218,7 @@ jobs:
                   - ${DATA_DIR}/dbt-target:/app/dbt/target
                 env_file: .env.prod
               streamlit:
-                image: ghcr.io/${GHCR_OWNER}/dataforge-streamlit:${IMAGE_TAG}
+                image: ${DOCKERHUB_USERNAME}/dataforge-streamlit:${IMAGE_TAG}
                 restart: always
                 ports:
                   - "8501:8501"
@@ -232,7 +229,7 @@ jobs:
                 env_file: .env.prod
                 depends_on: [api]
               ui:
-                image: ghcr.io/${GHCR_OWNER}/dataforge-ui:${IMAGE_TAG}
+                image: ${DOCKERHUB_USERNAME}/dataforge-ui:${IMAGE_TAG}
                 restart: always
                 ports:
                   - "8503:8503"
@@ -240,7 +237,7 @@ jobs:
             COMPOSE_EOF
 
             cd "$APP_DIR"
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GHCR_OWNER" --password-stdin
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f

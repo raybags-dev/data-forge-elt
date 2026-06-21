@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # DataForge ELT — Production Deploy Script
-# Pulls updated images from ghcr.io and restarts the stack on the VPS.
+# Pulls updated images from Docker Hub and restarts the stack on the VPS.
 # Called by GitHub Actions deploy job. Can also be run manually on the server.
 # =============================================================================
 set -euo pipefail
@@ -9,9 +9,9 @@ set -euo pipefail
 APP_DIR=/opt/dataforge-elt
 DATA_DIR=/mnt/portfolio-data/dataforge
 
-GHCR_OWNER="${GHCR_OWNER:-raybags-dev}"
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-}"
+DOCKERHUB_TOKEN="${DOCKERHUB_TOKEN:-}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
@@ -22,10 +22,10 @@ mkdir -p "$DATA_DIR"/{datalake/{raw,bronze,silver,gold},warehouse,logs/screensho
 
 cd "$APP_DIR"
 
-# Login to ghcr.io if token provided
-if [ -n "$GITHUB_TOKEN" ]; then
-  echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GHCR_OWNER" --password-stdin
-  log "Logged in to ghcr.io"
+# Login to Docker Hub if credentials provided
+if [ -n "$DOCKERHUB_TOKEN" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
+  echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  log "Logged in to Docker Hub as $DOCKERHUB_USERNAME"
 fi
 
 # Pull latest images

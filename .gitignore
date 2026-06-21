@@ -60,6 +60,11 @@ dbt/logs/
 # Claude Code AI assistant files (never commit)
 .claude/
 
+# Placeholder / internal planning files (not part of the public project)
+config.py
+directives.txt
+structure.md
+
 # OS files
 .DS_Store
 Thumbs.db

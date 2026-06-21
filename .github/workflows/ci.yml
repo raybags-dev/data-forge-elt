@@ -27,6 +27,7 @@ jobs:
 
       - name: Install Playwright browsers
         run: uv run playwright install --with-deps chromium
+        continue-on-error: true  # tests mock playwright; don't block on download failures
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -61,6 +62,13 @@ jobs:
       - name: Install Python deps
         run: uv sync
 
+      - name: Cache dbt packages
+        uses: actions/cache@v4
+        with:
+          path: dbt/dbt_packages
+          key: dbt-packages-${{ hashFiles('dbt/packages.yml') }}
+          restore-keys: dbt-packages-
+
       - name: dbt deps
         env:
           DUCKDB_PATH: /tmp/ci-dbt.duckdb
@@ -69,7 +77,7 @@ jobs:
       - name: dbt parse (syntax check)
         env:
           DUCKDB_PATH: /tmp/ci-dbt.duckdb
-        run: uv run dbt parse --project-dir dbt --profiles-dir dbt
+        run: uv run dbt parse --project-dir dbt --profiles-dir dbt --no-partial-parse
 
   # ── React UI: build ─────────────────────────────────────────────────────────
   ui-build:
@@ -80,7 +88,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"   # LTS — Node 20 is deprecated on GH Actions runners
+          node-version: "22"
 
       - name: Install
         working-directory: app/ui
@@ -105,3 +113,6 @@ jobs:
 
       - name: Build Streamlit image
         run: docker build -t dataforge-streamlit:ci -f docker/Dockerfile.streamlit .
+
+      - name: Build UI image
+        run: docker build -t dataforge-ui:ci -f docker/Dockerfile.ui .
