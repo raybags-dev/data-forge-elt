@@ -20,7 +20,7 @@ name: Deploy
 # AWS_ACCESS_KEY_ID        AWS access key
 # AWS_SECRET_ACCESS_KEY    AWS secret key
 # AWS_REGION               eu-central-1
-# AWS_S3_BUCKET            dataforge-elt-storage
+# AWS_S3_BUCKET            dataforge-elt-storage-2
 # KAGGLE_USERNAME          raymondbaguma
 # KAGGLE_KEY               Kaggle API key
 # GROQ_API_KEY             Groq API key
@@ -116,6 +116,7 @@ jobs:
           push: true
           build-args: |
             VITE_API_BASE_URL=https://raybags.com/dataforge
+            VITE_PORTFOLIO_API_URL=https://raybags.com
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:latest
             ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:${{ github.sha }}

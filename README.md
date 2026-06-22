@@ -246,7 +246,7 @@ Full interactive docs: http://localhost:8002/docs
 | `KAGGLE_USERNAME` | Kaggle API username | — |
 | `KAGGLE_KEY` | Kaggle API key | — |
 | `AWS_ACCESS_KEY_ID` | AWS access key | — |
-| `AWS_S3_BUCKET` | S3 bucket name | `dataforge-elt-storage` |
+| `AWS_S3_BUCKET` | S3 bucket name | `dataforge-elt-storage-2` |
 | `SUPABASE_URL` | Supabase project URL | — |
 | `MONGODB_URL` | MongoDB Atlas connection | — |
 | `MONGODB_DB` | MongoDB database name | `dataforge_elt` |
