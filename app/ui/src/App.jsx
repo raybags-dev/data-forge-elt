@@ -12,7 +12,7 @@ import Pipeline from './pages/Pipeline.jsx'
  */
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/dataforge">
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />

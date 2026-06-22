@@ -115,7 +115,7 @@ jobs:
           file: docker/Dockerfile.ui
           push: true
           build-args: |
-            VITE_API_BASE_URL=http://89.167.74.127:8002
+            VITE_API_BASE_URL=https://raybags.com/dataforge
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:latest
             ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/dataforge-ui:${{ github.sha }}
