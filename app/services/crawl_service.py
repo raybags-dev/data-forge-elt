@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import shlex
 import uuid
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup, Tag
@@ -16,7 +19,9 @@ from app.api.schemas.crawl import (
     CrawlRequest,
     CrawlResponse,
     FieldSpec,
+    HttpMethod,
     PaginationMode,
+    ParseCurlResponse,
     SourceMode,
 )
 from shared.logger import get_logger
@@ -26,7 +31,7 @@ if TYPE_CHECKING:
     from datalake.manager import DataLakeManager
     from shared.notifier import Notifier
 
-# Source-specific defaults: container selector + key field selectors
+# Source-specific defaults
 SOURCE_DEFAULTS: dict[str, dict[str, Any]] = {
     "reddit": {
         "container": "shreddit-post, [data-testid='post-container'], .Post",
@@ -152,7 +157,9 @@ class CrawlService:
             if request.html_snippet:
                 html = request.html_snippet
             else:
-                html = await self._fetch_html(request.url)
+                self._log.info(f"Fetching HTML for analysis: {request.url}")
+                html = await self._fetch_html_playwright(request.url)
+            self._log.info(f"HTML fetched ({len(html)} chars), running LLM analysis")
             return await self._llm_analyze(html, request.source, request.url)
         except Exception as exc:
             self._log.error(f"analyze failed: {exc}")
@@ -167,6 +174,99 @@ class CrawlService:
             }
             for src, cfg in SOURCE_DEFAULTS.items()
         }
+
+    def parse_curl(self, curl_command: str) -> ParseCurlResponse:
+        """Parse a raw curl command string into structured fields."""
+        cmd = curl_command.replace("\\\n", " ").replace("\\\r\n", " ").strip()
+        try:
+            tokens = shlex.split(cmd)
+        except ValueError:
+            tokens = cmd.split()
+
+        url: str | None = None
+        headers: dict[str, str] = {}
+        body: str | None = None
+        method_override: str | None = None
+
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok in ("curl", "curl.exe"):
+                i += 1
+                continue
+            if tok in ("-H", "--header") and i + 1 < len(tokens):
+                header_str = tokens[i + 1]
+                if ":" in header_str:
+                    key, _, val = header_str.partition(":")
+                    headers[key.strip()] = val.strip()
+                i += 2
+                continue
+            if tok in ("-d", "--data", "--data-raw", "--data-binary") and i + 1 < len(tokens):
+                body = tokens[i + 1]
+                i += 2
+                continue
+            if tok in ("-X", "--request") and i + 1 < len(tokens):
+                method_override = tokens[i + 1].upper()
+                i += 2
+                continue
+            if tok.startswith("--") or tok.startswith("-"):
+                # skip unknown flags (may have value)
+                i += 2 if i + 1 < len(tokens) and not tokens[i + 1].startswith("-") else 1
+                continue
+            if url is None and (tok.startswith("http://") or tok.startswith("https://")):
+                url = tok
+            i += 1
+
+        method = (method_override or ("POST" if body else "GET")).lower()
+
+        body_parsed: dict[str, Any] | None = None
+        if body:
+            import contextlib
+            with contextlib.suppress(json.JSONDecodeError, ValueError):
+                body_parsed = json.loads(body)
+
+        # GraphQL detection
+        is_graphql = False
+        if url:
+            parsed_url = urlparse(url)
+            qs = parsed_url.query
+            is_graphql = (
+                "operationName" in qs
+                or "graphql" in (parsed_url.path or "").lower()
+                or (body_parsed is not None and "query" in body_parsed)
+            )
+
+        # Pagination hint detection
+        pagination_hint = "none"
+        if body_parsed and isinstance(body_parsed, dict):
+            variables = body_parsed.get("variables", body_parsed)
+            if isinstance(variables, dict):
+                keys_lower = {k.lower() for k in variables}
+                if "after" in keys_lower or "cursor" in keys_lower:
+                    pagination_hint = "cursor"
+                elif "page" in keys_lower:
+                    pagination_hint = "page"
+                elif "offset" in keys_lower:
+                    pagination_hint = "cursor"
+        elif url and "page=" in url:
+            pagination_hint = "page"
+
+        notes_parts = []
+        if is_graphql:
+            notes_parts.append("GraphQL endpoint detected — operationName found in URL or body.")
+        if not url:
+            notes_parts.append("Could not extract URL from curl command.")
+
+        return ParseCurlResponse(
+            url=url,
+            method=method,
+            headers=headers,
+            body=body,
+            body_parsed=body_parsed,
+            pagination_hint=pagination_hint,
+            is_graphql=is_graphql,
+            notes="; ".join(notes_parts) or None,
+        )
 
     # ── DOM crawl ─────────────────────────────────────────────────────────────
 
@@ -183,13 +283,15 @@ class CrawlService:
 
         all_records: list[dict[str, Any]] = []
         pages_fetched = 0
-        healing_events = []
+        healing_events: list[Any] = []
         suggested_selectors = None
+
+        self._log.info(f"DOM crawl starting: {request.url} container={container_sel}")
 
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=self._settings.headless)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (compatible; DataForge/1.0)",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800},
             )
             page = await context.new_page()
@@ -199,13 +301,14 @@ class CrawlService:
 
             while current_url and page_num <= request.max_pages:
                 try:
-                    await page.goto(current_url, wait_until="domcontentloaded", timeout=30_000)
+                    self._log.info(f"Fetching page {page_num}: {current_url}")
+                    await page.goto(current_url, wait_until="domcontentloaded", timeout=45_000)
 
                     wait_sel = source_defaults.get("wait_for")
                     if wait_sel:
                         import contextlib
                         with contextlib.suppress(Exception):
-                            await page.wait_for_selector(wait_sel, timeout=8_000)
+                            await page.wait_for_selector(wait_sel, timeout=10_000)
 
                     if (
                         request.pagination in (PaginationMode.SCROLL,)
@@ -215,8 +318,10 @@ class CrawlService:
 
                     html = await page.content()
                     pages_fetched += 1
+                    self._log.info(f"Page {page_num} fetched ({len(html)} chars)")
 
                     if not container_sel and (cfg is None or cfg.llm_auto_detect):
+                        self._log.info("No container selector — running LLM analysis")
                         analyze_resp = await self._llm_analyze(html, request.source, current_url)
                         container_sel = analyze_resp.container
                         if not field_specs and analyze_resp.fields:
@@ -226,8 +331,10 @@ class CrawlService:
                                 "fields": [f.model_dump() for f in field_specs],
                                 "llm_confidence": analyze_resp.confidence,
                             }
+                        self._log.info(f"LLM detected container={container_sel} fields={len(field_specs)}")
 
                     records = self._extract_records(html, container_sel, field_specs, cfg)
+                    self._log.info(f"Extracted {len(records)} records from page {page_num}")
                     all_records.extend(records)
 
                     current_url = self._next_url(
@@ -248,6 +355,8 @@ class CrawlService:
         if all_records:
             output_path = await self._save_records(all_records, dataset_name)
 
+        self._log.info(f"DOM crawl complete: {len(all_records)} records, dataset={dataset_name}")
+
         return CrawlResponse(
             run_id=run_id,
             status="success" if all_records else "empty",
@@ -265,7 +374,6 @@ class CrawlService:
 
     async def _crawl_curl(self, run_id: str, request: CrawlRequest) -> CrawlResponse:
         all_records: list[dict[str, Any]] = []
-        pages_fetched = 0
         headers = {"Content-Type": "application/json", **(request.curl_headers or {})}
 
         body_template: dict[str, Any] = {}
@@ -278,23 +386,51 @@ class CrawlService:
                     message=f"curl_body is not valid JSON: {exc}"
                 )
 
-        async with httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=True) as client:
-            for page_num in range(1, request.max_pages + 1):
-                body = self._build_curl_body(body_template, page_num, request.pagination)
-                try:
-                    resp = await client.post(request.url, json=body)
-                    resp.raise_for_status()
-                    pages_fetched += 1
-                    data = resp.json()
-                    records = self._flatten_curl_response(data)
-                    if not records:
+        method = (request.method or HttpMethod.POST).value.upper()
+        self._log.info(f"cURL crawl: {method} {request.url} pagination={request.pagination} max_pages={request.max_pages}")
+
+        async with httpx.AsyncClient(timeout=60, headers=headers, follow_redirects=True) as client:
+            if request.pagination in (PaginationMode.PAGE,) and request.max_pages > 1:
+                self._log.info(f"Concurrent page fetch: {request.max_pages} pages")
+                tasks = [
+                    self._curl_single_page(client, request.url, method, body_template, page_num, request.pagination)
+                    for page_num in range(1, request.max_pages + 1)
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                pages_fetched = 0
+                for res in results:
+                    if isinstance(res, list):
+                        all_records.extend(res)
+                        pages_fetched += 1
+                    else:
+                        self._log.warning(f"A concurrent page failed: {res}")
+            else:
+                pages_fetched = 0
+                cursor: str | None = None
+                for page_num in range(1, request.max_pages + 1):
+                    try:
+                        body = self._build_curl_body(body_template, page_num, request.pagination, cursor)
+                        if method == "GET":
+                            resp = await client.get(request.url)
+                        else:
+                            resp = await client.post(request.url, json=body)
+                        resp.raise_for_status()
+                        pages_fetched += 1
+                        data = resp.json()
+                        records = self._flatten_curl_response(data)
+                        self._log.info(f"Page {page_num}: {len(records)} records")
+                        if not records:
+                            break
+                        all_records.extend(records)
+                        cursor = self._extract_cursor(data)
+                        if request.pagination == PaginationMode.NONE:
+                            break
+                        if request.pagination == PaginationMode.CURSOR and not cursor:
+                            self._log.info("No cursor in response — stopping pagination")
+                            break
+                    except Exception as exc:
+                        self._log.warning(f"cURL page {page_num} failed: {exc}")
                         break
-                    all_records.extend(records)
-                    if request.pagination == PaginationMode.NONE:
-                        break
-                except Exception as exc:
-                    self._log.warning(f"cURL page {page_num} failed: {exc}")
-                    break
 
         dataset_name = request.output_name or await self._suggest_dataset_name(
             request.url, request.source, all_records
@@ -303,6 +439,8 @@ class CrawlService:
         output_path: str | None = None
         if all_records:
             output_path = await self._save_records(all_records, dataset_name)
+
+        self._log.info(f"cURL crawl complete: {len(all_records)} records")
 
         return CrawlResponse(
             run_id=run_id,
@@ -314,6 +452,23 @@ class CrawlService:
             output_path=output_path,
             records_preview=all_records[:10],
         )
+
+    async def _curl_single_page(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        method: str,
+        body_template: dict[str, Any],
+        page_num: int,
+        pagination: PaginationMode,
+    ) -> list[dict[str, Any]]:
+        body = self._build_curl_body(body_template, page_num, pagination, None)
+        if method == "GET":
+            resp = await client.get(url)
+        else:
+            resp = await client.post(url, json=body)
+        resp.raise_for_status()
+        return self._flatten_curl_response(resp.json())
 
     # ── Extraction helpers ────────────────────────────────────────────────────
 
@@ -377,7 +532,6 @@ class CrawlService:
         return str(val) if val else None
 
     def _elem_to_cascading(self, elem: Tag) -> dict[str, Any]:
-        """Convert an element and its descendants to a cascading dict."""
         result: dict[str, Any] = {}
         tag_name = elem.name or "item"
         text = elem.get_text(strip=True)
@@ -438,6 +592,7 @@ class CrawlService:
 
         snippet = str(soup)[:12_000]
 
+        self._log.info(f"Sending {len(snippet)} chars to Groq for analysis (source={source})")
         prompt = _GROQ_ANALYZE_PROMPT.format(source=source, html=snippet)
         try:
             raw = await self._groq_chat(api_key, _GROQ_SYSTEM, prompt)
@@ -454,6 +609,8 @@ class CrawlService:
                 )
                 for f in data.get("fields", [])
             ]
+
+            self._log.info(f"LLM analysis complete: confidence={data.get('confidence')} fields={len(fields)}")
 
             return AnalyzeResponse(
                 container=data.get("container"),
@@ -486,7 +643,7 @@ class CrawlService:
             return f"{source}_dataset"
 
     async def _groq_chat(self, api_key: str, system: str, user: str) -> str:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
@@ -520,37 +677,28 @@ class CrawlService:
             return None
 
         if mode == PaginationMode.PAGE:
-            from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-            parsed = urlparse(current_url)
+            from urllib.parse import parse_qs, urlencode, urlunparse
+            from urllib.parse import urlparse as _urlparse
+            parsed = _urlparse(current_url)
             params = parse_qs(parsed.query, keep_blank_values=True)
             params["page"] = [str(page_num + 1)]
             flat = {k: v[0] for k, v in params.items()}
             return urlunparse(parsed._replace(query=urlencode(flat)))
 
-        if mode == PaginationMode.CURSOR:
+        if mode in (PaginationMode.CURSOR, PaginationMode.BUTTON):
             soup = BeautifulSoup(html, "html.parser")
-            next_link = soup.select_one("a[rel='next'], .next a, [aria-label='Next']")
+            next_link = soup.select_one(
+                "a[rel='next'], .next a, [aria-label='Next'], a.next, [aria-label='Next page'] a"
+            )
             if next_link:
                 href = next_link.get("href")
                 if href:
-                    from urllib.parse import urljoin
                     return urljoin(current_url, str(href))
-            return None
-
-        if mode == PaginationMode.BUTTON:
-            soup = BeautifulSoup(html, "html.parser")
-            next_link = soup.select_one(
-                "a.next, a[rel='next'], button.next, [aria-label='Next page'] a"
-            )
-            if next_link and next_link.name == "a":
-                from urllib.parse import urljoin
-                return urljoin(current_url, str(next_link.get("href", "")))
             return None
 
         return None
 
     async def _auto_scroll(self, page: Any) -> None:
-        """Scroll the page to trigger lazy-loaded content."""
         try:
             prev_height = 0
             for _ in range(8):
@@ -563,13 +711,37 @@ class CrawlService:
         except Exception:
             pass
 
-    # ── Misc helpers ──────────────────────────────────────────────────────────
+    # ── HTML fetch helpers ────────────────────────────────────────────────────
+
+    async def _fetch_html_playwright(self, url: str) -> str:
+        """Fetch fully-rendered HTML via Playwright (handles JS-heavy sites)."""
+        from playwright.async_api import async_playwright
+
+        self._log.info(f"Playwright fetch: {url}")
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=self._settings.headless)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800},
+            )
+            page = await context.new_page()
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+                await page.wait_for_timeout(2000)
+                html = await page.content()
+            finally:
+                await browser.close()
+        self._log.info(f"Playwright fetch complete: {len(html)} chars")
+        return html
 
     async def _fetch_html(self, url: str) -> str:
+        """Fallback HTML fetch via httpx (fast but no JS rendering)."""
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 DataForge/1.0"})
             resp.raise_for_status()
             return resp.text
+
+    # ── Misc helpers ──────────────────────────────────────────────────────────
 
     async def _save_records(self, records: list[dict[str, Any]], name: str) -> str:
         import pandas as pd
@@ -582,20 +754,54 @@ class CrawlService:
         return str(out_path)
 
     def _build_curl_body(
-        self, template: dict[str, Any], page_num: int, mode: PaginationMode
+        self,
+        template: dict[str, Any],
+        page_num: int,
+        mode: PaginationMode,
+        cursor: str | None,
     ) -> dict[str, Any]:
         body = dict(template)
         if mode == PaginationMode.PAGE:
             body["page"] = page_num
         elif mode == PaginationMode.CURSOR:
-            body["offset"] = (page_num - 1) * body.get("limit", 20)
+            if cursor:
+                body["after"] = cursor
+            else:
+                body["offset"] = (page_num - 1) * body.get("limit", 20)
         return body
+
+    def _extract_cursor(self, data: Any) -> str | None:
+        """Extract next cursor/token from a response for cursor-based pagination."""
+        if not isinstance(data, dict):
+            return None
+        for key in ("nextCursor", "next_cursor", "cursor", "after", "next_page_token", "continuation"):
+            val = data.get(key)
+            if val and isinstance(val, str):
+                return val
+        page_info = data.get("data", {})
+        if isinstance(page_info, dict):
+            for v in page_info.values():
+                if isinstance(v, dict):
+                    pi = v.get("pageInfo", {})
+                    if isinstance(pi, dict) and pi.get("hasNextPage"):
+                        return pi.get("endCursor")
+        return None
 
     def _flatten_curl_response(self, data: Any) -> list[dict[str, Any]]:
         if isinstance(data, list):
             return [r for r in data if isinstance(r, dict)]
         if isinstance(data, dict):
-            for key in ("data", "results", "items", "records", "hits", "posts", "content"):
+            gql_data = data.get("data")
+            if isinstance(gql_data, dict):
+                for val in gql_data.values():
+                    if isinstance(val, dict):
+                        edges = val.get("edges")
+                        if isinstance(edges, list):
+                            return [e.get("node", e) for e in edges if isinstance(e, dict)]
+                        items = val.get("items") or val.get("results") or val.get("nodes")
+                        if isinstance(items, list):
+                            return [r for r in items if isinstance(r, dict)]
+            for key in ("data", "results", "items", "records", "hits", "posts", "content", "list"):
                 if key in data and isinstance(data[key], list):
                     return [r for r in data[key] if isinstance(r, dict)]
             return [data]

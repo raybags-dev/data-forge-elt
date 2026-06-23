@@ -6,7 +6,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.schemas.crawl import AnalyzeRequest, AnalyzeResponse, CrawlRequest, CrawlResponse
+from app.api.schemas.crawl import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    CrawlRequest,
+    CrawlResponse,
+    ParseCurlRequest,
+    ParseCurlResponse,
+)
 from app.dependencies import get_crawl_service
 from app.services.crawl_service import CrawlService
 
@@ -56,3 +63,15 @@ async def list_sources(
 )
 async def crawler_status() -> dict[str, str]:
     return {"status": "ready"}
+
+
+@router.post(
+    "/parse-curl",
+    response_model=ParseCurlResponse,
+    summary="Parse a raw curl command into structured fields",
+)
+async def parse_curl(
+    request: ParseCurlRequest,
+    service: CrawlService = Depends(get_crawl_service),
+) -> ParseCurlResponse:
+    return service.parse_curl(request.curl_command)

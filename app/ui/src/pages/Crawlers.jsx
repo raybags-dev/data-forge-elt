@@ -1,11 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { analyzeCrawl, getSources, triggerCrawl } from '../api/crawl.js'
+import { analyzeCrawl, getSources, parseCurl, triggerCrawl } from '../api/crawl.js'
 
 const SOURCES = ['reddit', 'steam', 'imdb', 'news', 'custom']
 const PAGINATION_MODES = ['none', 'page', 'cursor', 'scroll', 'button']
 const SOURCE_MODES = ['dom', 'curl']
 const ATTR_OPTIONS = ['text', 'href', 'src', 'data-id', 'data-value', 'datetime', 'title', 'alt']
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8002'
+
+const LEVEL_CLASS = {
+  ERROR: 'text-red-400',
+  WARNING: 'text-yellow-400',
+  WARN: 'text-yellow-400',
+  INFO: 'text-emerald-400',
+  DEBUG: 'text-slate-500',
+}
 
 const EMPTY_FIELD = () => ({
   id: Math.random().toString(36).slice(2),
@@ -15,6 +25,8 @@ const EMPTY_FIELD = () => ({
   multiple: false,
   children: [],
 })
+
+// ── FieldRow ──────────────────────────────────────────────────────────────────
 
 function FieldRow({ field, onChange, onRemove, depth = 0 }) {
   const [expanded, setExpanded] = useState(false)
@@ -119,6 +131,8 @@ function FieldRow({ field, onChange, onRemove, depth = 0 }) {
   )
 }
 
+// ── JsonPreview ───────────────────────────────────────────────────────────────
+
 function JsonPreview({ data }) {
   const [collapsed, setCollapsed] = useState(false)
   if (!data || (Array.isArray(data) && data.length === 0)) return null
@@ -142,6 +156,8 @@ function JsonPreview({ data }) {
   )
 }
 
+// ── ConfidenceBadge ───────────────────────────────────────────────────────────
+
 function ConfidenceBadge({ level }) {
   const map = {
     high: 'bg-emerald-900/50 text-emerald-300 border-emerald-700',
@@ -155,6 +171,94 @@ function ConfidenceBadge({ level }) {
   )
 }
 
+// ── LogsPanel ─────────────────────────────────────────────────────────────────
+
+function LogsPanel({ open, onClose }) {
+  const [lines, setLines] = useState([])
+  const bottomRef = useRef(null)
+  const esRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const es = new EventSource(`${API_BASE}/api/v1/logs/stream`)
+    esRef.current = es
+    es.onmessage = (evt) => {
+      try {
+        const entry = JSON.parse(evt.data)
+        if (entry.connected) return
+        setLines(prev => [...prev.slice(-499), entry])
+      } catch {
+        // ignore malformed
+      }
+    }
+    es.onerror = () => {
+      // SSE auto-reconnects; don't spam errors
+    }
+    return () => {
+      es.close()
+      esRef.current = null
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [lines])
+
+  if (!open) return null
+
+  function levelClass(level) {
+    return LEVEL_CLASS[(level || '').toUpperCase()] || 'text-slate-300'
+  }
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950 border-t border-slate-700 shadow-2xl" style={{ height: '260px' }}>
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-mono font-semibold text-slate-300">Live Logs</span>
+          <span className="text-xs text-slate-500">{lines.length} entries</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setLines([])}
+            className="text-xs text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded hover:bg-slate-800 transition-colors"
+          >
+            Clear
+          </button>
+          <button
+            onClick={onClose}
+            className="text-xs text-slate-500 hover:text-red-400 px-2 py-0.5 rounded hover:bg-slate-800 transition-colors"
+          >
+            ✕ Close
+          </button>
+        </div>
+      </div>
+      <div className="overflow-y-auto h-[calc(100%-37px)] p-3 font-mono text-xs space-y-0.5">
+        {lines.length === 0 ? (
+          <p className="text-slate-600">Waiting for log events…</p>
+        ) : (
+          lines.map((entry, i) => (
+            <div key={i} className={`leading-5 whitespace-pre-wrap break-all ${levelClass(entry.level)}`}>
+              <span className="text-slate-600">{entry.time ? entry.time.slice(11, 23) : ''}</span>
+              {' '}
+              <span className="font-semibold">[{entry.level || 'INFO'}]</span>
+              {' '}
+              <span className="text-slate-400">{entry.name || ''}</span>
+              {' '}
+              {entry.message}
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  )
+}
+
+// ── Main Crawlers page ────────────────────────────────────────────────────────
+
 export default function Crawlers() {
   const [source, setSource] = useState('reddit')
   const [mode, setMode] = useState('dom')
@@ -165,6 +269,9 @@ export default function Crawlers() {
   const [fields, setFields] = useState([])
   const [curlBody, setCurlBody] = useState('')
   const [curlHeaders, setCurlHeaders] = useState('')
+  const [curlRaw, setCurlRaw] = useState('')
+  const [curlParsed, setCurlParsed] = useState(null)
+  const [parsingCurl, setParsingCurl] = useState(false)
   const [outputName, setOutputName] = useState('')
   const [llmAutoDetect, setLlmAutoDetect] = useState(true)
   const [extractAll, setExtractAll] = useState(false)
@@ -175,6 +282,7 @@ export default function Crawlers() {
   const [sourceDefaults, setSourceDefaults] = useState({})
   const [activeTab, setActiveTab] = useState('config')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [logsOpen, setLogsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -210,6 +318,7 @@ export default function Crawlers() {
   async function handleAnalyze() {
     if (!url) { toast.error('Enter a URL to analyze'); return }
     setAnalyzing(true)
+    setLogsOpen(true)
     try {
       const ar = await analyzeCrawl({ url, source })
       setAnalyzeResult(ar)
@@ -226,10 +335,37 @@ export default function Crawlers() {
     }
   }
 
+  async function handleParseCurl() {
+    if (!curlRaw.trim()) { toast.error('Paste a curl command first'); return }
+    setParsingCurl(true)
+    try {
+      const res = await parseCurl({ curl_command: curlRaw })
+      setCurlParsed(res)
+      if (res.url) setUrl(res.url)
+      if (res.headers && Object.keys(res.headers).length > 0) {
+        setCurlHeaders(JSON.stringify(res.headers, null, 2))
+      }
+      if (res.body_parsed) {
+        setCurlBody(JSON.stringify(res.body_parsed, null, 2))
+      } else if (res.body) {
+        setCurlBody(res.body)
+      }
+      if (res.pagination_hint && res.pagination_hint !== 'none') {
+        setPagination(res.pagination_hint)
+      }
+      toast.success(`Parsed — ${res.method?.toUpperCase()} ${res.is_graphql ? '(GraphQL)' : ''}`)
+    } catch (err) {
+      toast.error(`Parse failed: ${err.message}`)
+    } finally {
+      setParsingCurl(false)
+    }
+  }
+
   async function handleCrawl() {
     if (!url) { toast.error('Enter a URL'); return }
     setCrawling(true)
     setResult(null)
+    setLogsOpen(true)
 
     let parsedCurlHeaders
     if (curlHeaders.trim()) {
@@ -242,12 +378,15 @@ export default function Crawlers() {
       }
     }
 
+    const method = curlParsed?.method || 'post'
+
     const payload = {
       source,
       url,
       mode,
       pagination,
       max_pages: parseInt(maxPages, 10) || 1,
+      method,
       output_name: outputName || undefined,
       config: {
         container: container || undefined,
@@ -280,9 +419,10 @@ export default function Crawlers() {
   }
 
   const def = sourceDefaults[source]
+  const busy = analyzing || crawling
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6" style={{ paddingBottom: logsOpen ? '270px' : '0' }}>
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -291,46 +431,59 @@ export default function Crawlers() {
             Extract structured datasets from any web source — DOM or cURL, LLM-assisted or manual.
           </p>
         </div>
-        <div className="relative" ref={dropdownRef}>
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setDropdownOpen(x => !x)}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+            onClick={() => setLogsOpen(x => !x)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+              logsOpen
+                ? 'bg-emerald-900/30 border-emerald-700 text-emerald-300'
+                : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-slate-200'
+            }`}
           >
-            Options
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <span className={`w-1.5 h-1.5 rounded-full ${logsOpen ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            Logs
           </button>
-          {dropdownOpen && (
-            <div className="absolute right-0 mt-1 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 py-1">
-              {[
-                { label: 'Extract all descendants', value: extractAll, set: setExtractAll },
-                { label: 'LLM auto-detect selectors', value: llmAutoDetect, set: setLlmAutoDetect },
-              ].map(opt => (
-                <label key={opt.label} className="flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={opt.value} onChange={e => opt.set(e.target.checked)} className="rounded" />
-                  {opt.label}
-                </label>
-              ))}
-              <hr className="border-slate-700 my-1" />
-              <div className="px-4 py-2">
-                <label className="text-xs text-slate-400 block mb-1">Max pages</label>
-                <input
-                  type="number" min={1} max={50} value={maxPages}
-                  onChange={e => setMaxPages(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded px-2 py-1 text-sm"
-                />
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(x => !x)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+            >
+              Options
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-1 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 py-1">
+                {[
+                  { label: 'Extract all descendants', value: extractAll, set: setExtractAll },
+                  { label: 'LLM auto-detect selectors', value: llmAutoDetect, set: setLlmAutoDetect },
+                ].map(opt => (
+                  <label key={opt.label} className="flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={opt.value} onChange={e => opt.set(e.target.checked)} className="rounded" />
+                    {opt.label}
+                  </label>
+                ))}
+                <hr className="border-slate-700 my-1" />
+                <div className="px-4 py-2">
+                  <label className="text-xs text-slate-400 block mb-1">Max pages</label>
+                  <input
+                    type="number" min={1} max={50} value={maxPages}
+                    onChange={e => setMaxPages(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded px-2 py-1 text-sm"
+                  />
+                </div>
+                <div className="px-4 py-2">
+                  <label className="text-xs text-slate-400 block mb-1">Dataset name</label>
+                  <input
+                    value={outputName} onChange={e => setOutputName(e.target.value)}
+                    placeholder="auto-detected"
+                    className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded px-2 py-1 text-sm font-mono placeholder-slate-600"
+                  />
+                </div>
               </div>
-              <div className="px-4 py-2">
-                <label className="text-xs text-slate-400 block mb-1">Dataset name</label>
-                <input
-                  value={outputName} onChange={e => setOutputName(e.target.value)}
-                  placeholder="auto-detected"
-                  className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded px-2 py-1 text-sm font-mono placeholder-slate-600"
-                />
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -350,7 +503,7 @@ export default function Crawlers() {
           <div className="flex rounded-lg overflow-hidden border border-slate-600">
             {SOURCE_MODES.map(m => (
               <button
-                key={m} onClick={() => setMode(m)}
+                key={m} onClick={() => { setMode(m); if (m === 'curl') setActiveTab('curl') }}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
                   mode === m ? 'bg-sky-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}
@@ -534,6 +687,62 @@ export default function Crawlers() {
       {/* cURL tab */}
       {activeTab === 'curl' && mode === 'curl' && (
         <div className="space-y-4">
+          {/* Paste curl command */}
+          <div className="rounded-lg border border-sky-700/30 bg-sky-900/10 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-sky-300">Paste curl command</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Paste a full <code className="text-sky-400">curl &apos;...&apos; -H &apos;...&apos;</code> command — URL, headers, and body are auto-extracted.
+                </p>
+              </div>
+              {curlParsed && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2 py-0.5 rounded bg-sky-900/50 border border-sky-700 text-sky-300 font-mono">
+                    {curlParsed.method?.toUpperCase()}
+                  </span>
+                  {curlParsed.is_graphql && (
+                    <span className="px-2 py-0.5 rounded bg-violet-900/50 border border-violet-700 text-violet-300 font-mono">
+                      GraphQL
+                    </span>
+                  )}
+                  {curlParsed.pagination_hint !== 'none' && (
+                    <span className="px-2 py-0.5 rounded bg-amber-900/50 border border-amber-700 text-amber-300 font-mono">
+                      {curlParsed.pagination_hint} pagination
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <textarea
+              value={curlRaw}
+              onChange={e => setCurlRaw(e.target.value)}
+              rows={5}
+              placeholder={"curl 'https://api.example.com/graphql' \\\n  -H 'Authorization: Bearer token' \\\n  -H 'Content-Type: application/json' \\\n  --data-raw '{\"query\": \"...\", \"variables\": {\"first\": 20}}'"}
+              className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 text-xs font-mono placeholder-slate-600 focus:border-sky-500 focus:outline-none resize-y"
+            />
+            <button
+              onClick={handleParseCurl}
+              disabled={parsingCurl || !curlRaw.trim()}
+              className="px-4 py-2 bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+            >
+              {parsingCurl ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Parsing…
+                </>
+              ) : (
+                'Parse curl command →'
+              )}
+            </button>
+            {curlParsed?.notes && (
+              <p className="text-xs text-amber-400 bg-amber-900/20 rounded px-3 py-2 border border-amber-800/30">
+                {curlParsed.notes}
+              </p>
+            )}
+          </div>
+
+          {/* Manual fields */}
           <div>
             <label className="block text-xs text-slate-400 mb-1 font-medium uppercase tracking-wider">
               Request Body (JSON)
@@ -621,7 +830,7 @@ export default function Crawlers() {
             : 'httpx async client — JSON API, paginated requests, auto-flatten'}
         </p>
         <button
-          onClick={handleCrawl} disabled={crawling || !url}
+          onClick={handleCrawl} disabled={busy || !url}
           className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white rounded-lg text-sm font-semibold flex items-center gap-2.5 transition-colors shadow-lg shadow-sky-900/30"
         >
           {crawling ? (
@@ -640,6 +849,9 @@ export default function Crawlers() {
           )}
         </button>
       </div>
+
+      {/* Logs panel */}
+      <LogsPanel open={logsOpen} onClose={() => setLogsOpen(false)} />
     </div>
   )
 }

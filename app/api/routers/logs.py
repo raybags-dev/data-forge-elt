@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import json as _json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.schemas.logs import LogEntry, LogsResponse
 from app.dependencies import get_settings
@@ -114,3 +117,31 @@ def _parse_log_line(line: str) -> LogEntry | None:
         )
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
+
+
+@router.get(
+    "/stream",
+    summary="Real-time SSE log stream",
+    description="Server-Sent Events endpoint. Each event is a JSON log entry.",
+)
+async def stream_logs() -> StreamingResponse:
+    from shared.log_stream import subscribe, unsubscribe
+
+    async def generator():
+        q = subscribe()
+        try:
+            yield 'data: {"connected":true}\n\n'
+            while True:
+                try:
+                    entry = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {_json.dumps(entry)}\n\n"
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            unsubscribe(q)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

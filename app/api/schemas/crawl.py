@@ -21,6 +21,13 @@ class PaginationMode(StrEnum):
     BUTTON = "button"
 
 
+class HttpMethod(StrEnum):
+    GET = "get"
+    POST = "post"
+    PUT = "put"
+    PATCH = "patch"
+
+
 class FieldSpec(BaseModel):
     name: str = Field(..., description="Field name in output JSON")
     selector: str = Field(..., description="CSS selector")
@@ -47,6 +54,8 @@ class CrawlRequest(BaseModel):
     curl_body: str | None = Field(default=None, description="Raw cURL request body (JSON string)")
     curl_headers: dict[str, str] | None = Field(default=None, description="Additional headers for cURL mode")
     output_name: str | None = None
+    method: HttpMethod = Field(default=HttpMethod.POST, description="HTTP method for cURL mode")
+    curl_command: str | None = Field(default=None, description="Raw curl command string (for reference)")
 
 
 class HealingEvent(BaseModel):
@@ -69,6 +78,21 @@ class CrawlResponse(BaseModel):
     suggested_selectors: dict[str, Any] | None = Field(
         default=None, description="LLM-detected selectors for manual tuning"
     )
+
+
+class ParseCurlRequest(BaseModel):
+    curl_command: str = Field(..., description="Raw curl command string to parse")
+
+
+class ParseCurlResponse(BaseModel):
+    url: str | None = None
+    method: str = "post"
+    headers: dict[str, str] = Field(default_factory=dict)
+    body: str | None = None
+    body_parsed: dict[str, Any] | None = None
+    pagination_hint: str = "none"
+    is_graphql: bool = False
+    notes: str | None = None
 
 
 class AnalyzeRequest(BaseModel):

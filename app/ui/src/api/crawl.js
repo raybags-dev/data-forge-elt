@@ -24,3 +24,8 @@ export async function downloadKaggle(payload) {
   const { data } = await client.post('/api/v1/kaggle/download', payload)
   return data
 }
+
+export async function parseCurl(payload) {
+  const { data } = await client.post('/api/v1/crawl/parse-curl', payload)
+  return data
+}

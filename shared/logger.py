@@ -54,6 +54,20 @@ def _patched_record(record: dict[str, Any]) -> None:
             record["extra"].setdefault(key, value)
 
 
+def _memory_sink(message: Any) -> None:
+    """Push log records into the in-memory stream for SSE delivery."""
+    from shared.log_stream import push
+
+    record = message.record
+    push({
+        "time": record["time"].isoformat(),
+        "level": record["level"].name,
+        "message": record["message"],
+        "name": record["extra"].get("name", record.get("name", "")),
+        "pipeline_id": record["extra"].get("pipeline_id", ""),
+    })
+
+
 def configure_logging(settings: Settings) -> None:
     """Configure all Loguru sinks from *settings*.
 
@@ -87,6 +101,8 @@ def configure_logging(settings: Settings) -> None:
         serialize=True,
         enqueue=True,
     )
+
+    logger.add(_memory_sink, level=settings.log_level, enqueue=False)
 
 
 def get_logger(name: str) -> Logger:
