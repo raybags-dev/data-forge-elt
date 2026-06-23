@@ -1,10 +1,12 @@
-"""Router for POST /crawl endpoint."""
+"""Router for /crawl endpoints."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any
 
-from app.api.schemas.crawl import CrawlRequest, CrawlResponse
+from fastapi import APIRouter, Depends, status
+
+from app.api.schemas.crawl import AnalyzeRequest, AnalyzeResponse, CrawlRequest, CrawlResponse
 from app.dependencies import get_crawl_service
 from app.services.crawl_service import CrawlService
 
@@ -16,31 +18,41 @@ router = APIRouter(prefix="/crawl", tags=["crawl"])
     response_model=CrawlResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger a web crawl",
-    description="Queue a crawl for the specified source and seed URLs.",
 )
 async def crawl(
     request: CrawlRequest,
     service: CrawlService = Depends(get_crawl_service),
 ) -> CrawlResponse:
-    """Accept a crawl request and return a queued-job response.
+    return await service.run_crawl(request)
 
-    Args:
-        request: CrawlRequest with source, urls, and optional output_name.
-        service: Injected CrawlService instance.
 
-    Returns:
-        CrawlResponse with run_id and output_path.
+@router.post(
+    "/analyze",
+    response_model=AnalyzeResponse,
+    summary="LLM-assisted DOM analysis",
+    description="Fetch a URL, pass its HTML to Groq, return detected container + field selectors.",
+)
+async def analyze(
+    request: AnalyzeRequest,
+    service: CrawlService = Depends(get_crawl_service),
+) -> AnalyzeResponse:
+    return await service.analyze(request)
 
-    Raises:
-        HTTPException 422: If request validation fails (handled by FastAPI).
-    """
-    if not request.urls:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one URL is required",
-        )
-    return await service.run_crawl(
-        source=request.source,
-        urls=request.urls,
-        output_name=request.output_name,
-    )
+
+@router.get(
+    "/sources",
+    response_model=dict[str, Any],
+    summary="List built-in source configs",
+)
+async def list_sources(
+    service: CrawlService = Depends(get_crawl_service),
+) -> dict[str, Any]:
+    return service.get_sources()
+
+
+@router.get(
+    "/status",
+    summary="Crawler health check",
+)
+async def crawler_status() -> dict[str, str]:
+    return {"status": "ready"}

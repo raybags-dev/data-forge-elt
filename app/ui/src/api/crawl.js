@@ -1,24 +1,25 @@
 import client from './client.js'
 
-/** Fetch crawler status for all sources. */
 export async function fetchCrawlerStatus() {
   const { data } = await client.get('/api/v1/crawl/status')
   return data
 }
 
-/**
- * Trigger a crawl for a specific source.
- * @param {{ source: string, urls?: string[] }} payload
- */
 export async function triggerCrawl(payload) {
-  const { data } = await client.post('/api/v1/crawl/run', payload)
+  const { data } = await client.post('/api/v1/crawl', payload)
   return data
 }
 
-/**
- * Download a Kaggle dataset.
- * @param {{ dataset: string, path?: string }} payload
- */
+export async function analyzeCrawl(payload) {
+  const { data } = await client.post('/api/v1/crawl/analyze', payload)
+  return data
+}
+
+export async function getSources() {
+  const { data } = await client.get('/api/v1/crawl/sources')
+  return data
+}
+
 export async function downloadKaggle(payload) {
   const { data } = await client.post('/api/v1/kaggle/download', payload)
   return data
