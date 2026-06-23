@@ -203,10 +203,9 @@ class CrawlService:
 
                     wait_sel = source_defaults.get("wait_for")
                     if wait_sel:
-                        try:
+                        import contextlib
+                        with contextlib.suppress(Exception):
                             await page.wait_for_selector(wait_sel, timeout=8_000)
-                        except Exception:
-                            pass
 
                     if (
                         request.pagination in (PaginationMode.SCROLL,)
@@ -574,6 +573,7 @@ class CrawlService:
 
     async def _save_records(self, records: list[dict[str, Any]], name: str) -> str:
         import pandas as pd
+
         from shared.utils import ensure_directory
 
         out_path = self._lake.layer_path("raw", name) / "data.parquet"

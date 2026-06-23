@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class SourceMode(str, Enum):
+class SourceMode(StrEnum):
     DOM = "dom"
     CURL = "curl"
 
 
-class PaginationMode(str, Enum):
+class PaginationMode(StrEnum):
     NONE = "none"
     PAGE = "page"
     CURSOR = "cursor"
@@ -26,7 +26,7 @@ class FieldSpec(BaseModel):
     selector: str = Field(..., description="CSS selector")
     attribute: str = Field(default="text", description="text | href | src | data-*")
     multiple: bool = Field(default=False, description="Extract list of matching nodes")
-    children: list["FieldSpec"] = Field(default_factory=list, description="Nested fields")
+    children: list[FieldSpec] = Field(default_factory=list, description="Nested fields")
 
 
 class CrawlConfig(BaseModel):
