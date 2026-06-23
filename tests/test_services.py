@@ -201,14 +201,17 @@ async def test_crawl_service_returns_response(tmp_path, tmp_settings) -> None:
     notifier = NotifierFactory.build_notifier(tmp_settings)
     service = CrawlService(settings=tmp_settings, notifier=notifier, lake=lake)
 
-    result = await service.run_crawl(
+    from app.api.schemas.crawl import CrawlRequest
+
+    request = CrawlRequest(
         source="test_source",
-        urls=["https://example.com"],
+        url="https://example.com",
         output_name=None,
     )
+    result = await service.run_crawl(request)
 
     assert result.run_id != ""
-    assert result.status in ("queued", "error")
+    assert result.status in ("queued", "success", "error")
 
 
 # ── PipelineService tests ──────────────────────────────────────────────────────
