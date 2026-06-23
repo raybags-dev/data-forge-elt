@@ -210,6 +210,7 @@ jobs:
               api:
                 image: ${DOCKERHUB_USERNAME}/dataforge-api:${IMAGE_TAG}
                 restart: always
+                shm_size: 256mb
                 ports:
                   - "8002:8002"
                 volumes:
