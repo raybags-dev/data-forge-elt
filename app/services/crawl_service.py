@@ -289,7 +289,10 @@ class CrawlService:
         self._log.info(f"DOM crawl starting: {request.url} container={container_sel}")
 
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=self._settings.headless)
+            browser = await pw.chromium.launch(
+                headless=self._settings.headless,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800},
@@ -719,7 +722,10 @@ class CrawlService:
 
         self._log.info(f"Playwright fetch: {url}")
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=self._settings.headless)
+            browser = await pw.chromium.launch(
+                headless=self._settings.headless,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800},

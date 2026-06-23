@@ -32,11 +32,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     Shutdown:
         - Log graceful shutdown.
     """
+    import asyncio as _asyncio
+
     from config.settings import get_settings
     from datalake.manager import DataLakeManager
+    from shared.log_stream import set_loop as _set_log_loop
 
     settings = get_settings()
     configure_logging(settings)
+    _set_log_loop(_asyncio.get_running_loop())
     _log.info(f"DataForge ELT API v{_APP_VERSION} starting up")
 
     lake_log = get_logger("datalake.manager")
