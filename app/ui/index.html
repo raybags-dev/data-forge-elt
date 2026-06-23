@@ -5,8 +5,58 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DataForge ELT</title>
+    <style>
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 10, 18, 0.55);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transition: opacity 0.35s ease;
+      }
+      #app-loader.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .df-spinner {
+        position: relative;
+        width: 200px;
+        height: 200px;
+      }
+      .df-ring {
+        position: absolute;
+        border-radius: 50%;
+        border-style: solid;
+        animation: df-spin linear infinite;
+      }
+      .df-ring-outer {
+        inset: 0;
+        border-width: 10px;
+        border-color: #ffffff transparent #ffffff transparent;
+        animation-duration: 2s;
+      }
+      .df-ring-inner {
+        inset: 37px;
+        border-width: 8px;
+        border-color: #4caf50 transparent #4caf50 transparent;
+        animation-duration: 1s;
+      }
+      @keyframes df-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-loader">
+      <div class="df-spinner">
+        <div class="df-ring df-ring-outer"></div>
+        <div class="df-ring df-ring-inner"></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
