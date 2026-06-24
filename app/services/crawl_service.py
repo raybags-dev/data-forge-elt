@@ -124,6 +124,192 @@ URL: {url}
 Source: {source}
 Records sample keys: {keys}"""
 
+# ── Stealth / anti-bot ────────────────────────────────────────────────────────
+
+_STEALTH_SCRIPT = """
+() => {
+    Object.defineProperty(navigator, 'webdriver',  {get: () => undefined});
+    Object.defineProperty(navigator, 'plugins',    {get: () => [1, 2, 3, 4, 5]});
+    Object.defineProperty(navigator, 'languages',  {get: () => ['en-US', 'en']});
+    Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+    window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+    const origQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (p) =>
+        p.name === 'notifications'
+            ? Promise.resolve({state: Notification.permission})
+            : origQuery(p);
+}
+"""
+
+_COOKIE_SELECTORS: list[str] = [
+    # Known vendor IDs
+    "#onetrust-accept-btn-handler", "#accept-recommended-btn-handler",
+    "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+    "#CybotCookiebotDialogBodyButtonAccept",
+    "#cookie-accept", "#cookie_accept", "#cookieAccept",
+    "#acceptCookies", "#accept-cookies", "#acceptAllCookies",
+    "#btnAcceptAll", "#accept-all-cookies", "#acceptAll",
+    "#close-cookies", "#dismiss-cookie-message", "#cookie-close",
+    "#cookieConsentAccept", "#cookie-consent-accept",
+    "#cookie_agree", "#cookieAgree", "#cookie-agree",
+    # data-* attributes
+    '[data-testid="accept-cookie-button"]', '[data-testid="cookie-accept"]',
+    '[data-testid*="cookie"][data-testid*="accept"]',
+    '[data-testid*="consent"][data-testid*="accept"]',
+    '[data-testid*="cookie"][data-testid*="allow"]',
+    '[data-testid*="dismiss"]', '[data-testid*="cookie-close"]',
+    '[data-action="accept-cookies"]', '[data-action="accept"]',
+    '[data-action="dismiss"]', '[data-action="agree"]', '[data-action="allow"]',
+    '[data-type="accept"]', '[data-cookie="accept"]',
+    # aria-label
+    '[aria-label*="Accept"][aria-label*="cookie" i]',
+    '[aria-label*="Accept all" i]', '[aria-label*="Agree" i]',
+    '[aria-label*="Dismiss cookie" i]', '[aria-label*="Close cookie" i]',
+    '[aria-label="Dismiss"][role="button"]',
+    # button id keyword
+    'button[id*="accept"]', 'button[id*="Accept"]',
+    'button[id*="agree"]',  'button[id*="Agree"]',
+    'button[id*="allow"]',  'button[id*="Allow"]',
+    'button[id*="dismiss"]', 'button[id*="Dismiss"]',
+    'button[id*="consent"]', 'button[id*="cookie"]',
+    # button class keyword
+    'button[class*="accept"]', 'button[class*="Accept"]',
+    'button[class*="agree"]',  'button[class*="Agree"]',
+    'button[class*="allow"]',  'button[class*="Allow"]',
+    'button[class*="dismiss"]', 'button[class*="Dismiss"]',
+    'button[class*="consent"]', 'button[class*="cookie"]',
+    # container + button
+    ".cc-btn.cc-allow", ".cc-accept", ".cc-dismiss",
+    "[class*='cookie'] button[class*='accept']",
+    "[class*='cookie'] button[class*='allow']",
+    "[class*='cookie'] button[class*='agree']",
+    "[class*='consent'] button[class*='accept']",
+    "[class*='gdpr'] button[class*='accept']",
+    "[class*='privacy'] button[class*='accept']",
+    "[class*='cookie-banner'] button", "[class*='cookie-notice'] button",
+    "[class*='cookie-bar'] button", "[class*='cookie-popup'] button",
+    "[class*='cookie-modal'] button", "[class*='cookie-overlay'] button",
+    # text matchers — English
+    "button:has-text('Accept all')", "button:has-text('Accept All')",
+    "button:has-text('Accept All Cookies')", "button:has-text('Accept Cookies')",
+    "button:has-text('Accept cookies')", "button:has-text('Accept & close')",
+    "button:has-text('Accept and close')", "button:has-text('Accept')",
+    "button:has-text('Agree')", "button:has-text('I agree')",
+    "button:has-text('I Agree')", "button:has-text('Allow all')",
+    "button:has-text('Allow All')", "button:has-text('Allow All Cookies')",
+    "button:has-text('Allow cookies')", "button:has-text('Allow')",
+    "button:has-text('Got it')", "button:has-text('Got It')",
+    "button:has-text('OK')", "button:has-text('Ok')",
+    "button:has-text('Confirm')", "button:has-text('Close')",
+    "button:has-text('Dismiss')", "button:has-text('Continue')",
+    "button:has-text('Continue without accepting')",
+    # Non-English
+    "button:has-text('Akkoord')", "button:has-text('Zustimmen')",
+    "button:has-text('Alle akzeptieren')", "button:has-text('Accepter')",
+    "button:has-text('Accepter tout')", "button:has-text('Aceptar')",
+    "button:has-text('Aceptar todo')", "button:has-text('Accetta')",
+    "button:has-text('Accetta tutto')",
+]
+
+_COOKIE_DISMISS_JS = """
+() => {
+    const DISMISS_KWS = [
+        'accept','agree','allow','consent','dismiss','close','got it','ok',
+        'confirm','continue','yes','sure','reject','decline','refuse','deny',
+        'no thanks','i agree','i accept','allow all','accept all'
+    ];
+    const CONTEXT_KWS = [
+        'cookie','cookies','consent','privacy','gdpr','tracking','banner',
+        'notice','modal','popup','overlay'
+    ];
+    function norm(s) { return (s || '').toLowerCase().trim(); }
+    function isVisible(el) {
+        try {
+            const r = el.getBoundingClientRect();
+            const s = getComputedStyle(el);
+            return r.width > 5 && r.height > 5
+                && s.visibility !== 'hidden' && s.display !== 'none'
+                && parseFloat(s.opacity) > 0.05;
+        } catch(e) { return false; }
+    }
+    function textOf(el) {
+        return norm(el.innerText || el.textContent || el.value || '');
+    }
+    function attrsOf(el) {
+        return norm([el.id, el.className, el.name,
+            el.getAttribute('aria-label'), el.getAttribute('data-action'),
+            el.getAttribute('data-testid'), el.getAttribute('title'),
+            el.getAttribute('value')].join(' '));
+    }
+    function hasAny(text, list) { return list.some(kw => text.includes(kw)); }
+    function tryClick(el, source) {
+        try { el.click(); return { clicked: true, text: textOf(el).slice(0, 80), source }; }
+        catch(e) { return null; }
+    }
+    const containers = [
+        ...document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]'),
+        ...document.querySelectorAll('[class*="cookie"],[class*="consent"],[class*="gdpr"],[class*="privacy"],[class*="banner"],[class*="modal"],[id*="cookie"],[id*="consent"],[id*="gdpr"],[id*="privacy"],[id*="banner"]'),
+    ];
+    const seenC = new Set();
+    for (const c of containers) {
+        if (seenC.has(c) || !isVisible(c)) continue;
+        seenC.add(c);
+        for (const btn of c.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"],[onclick],[tabindex="0"]')) {
+            if (!isVisible(btn)) continue;
+            if (hasAny(textOf(btn) + ' ' + attrsOf(btn), DISMISS_KWS)) {
+                const r = tryClick(btn, 'dialog-container');
+                if (r) return r;
+            }
+        }
+    }
+    for (const btn of document.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]')) {
+        if (!isVisible(btn)) continue;
+        const combined = textOf(btn) + ' ' + attrsOf(btn);
+        if (!hasAny(combined, DISMISS_KWS)) continue;
+        const parent = btn.closest('[class*="cookie"],[class*="consent"],[class*="banner"],[class*="gdpr"],[id*="cookie"],[id*="consent"]');
+        if (hasAny(combined, CONTEXT_KWS) || parent !== null) {
+            const r = tryClick(btn, 'global-scan');
+            if (r) return r;
+        }
+    }
+    for (const el of document.querySelectorAll('[role="button"],[onclick]')) {
+        if (!isVisible(el)) continue;
+        const combined = textOf(el) + ' ' + attrsOf(el);
+        if (hasAny(combined, DISMISS_KWS) && hasAny(combined, CONTEXT_KWS)) {
+            const r = tryClick(el, 'clickable-role');
+            if (r) return r;
+        }
+    }
+    return { clicked: false };
+}
+"""
+
+_BROWSER_ARGS: list[str] = [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-extensions",
+    "--no-first-run",
+    "--disable-default-apps",
+    "--disable-infobars",
+    "--window-size=1920,1080",
+    "--ignore-certificate-errors",
+    "--disable-web-security",
+    "--allow-running-insecure-content",
+]
+
+_CONTEXT_KWARGS: dict = {
+    "user_agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "viewport": {"width": 1920, "height": 1080},
+    "locale": "en-US",
+    "timezone_id": "America/New_York",
+    "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"},
+}
+
 
 class CrawlService:
     """Runs web crawls via Playwright DOM or httpx cURL and Groq LLM analysis."""
@@ -291,12 +477,10 @@ class CrawlService:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(
                 headless=self._settings.headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                args=_BROWSER_ARGS,
             )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-            )
+            context = await browser.new_context(**_CONTEXT_KWARGS)
+            await context.add_init_script(_STEALTH_SCRIPT)
             page = await context.new_page()
 
             current_url: str | None = request.url
@@ -305,7 +489,15 @@ class CrawlService:
             while current_url and page_num <= request.max_pages:
                 try:
                     self._log.info(f"Fetching page {page_num}: {current_url}")
-                    await page.goto(current_url, wait_until="domcontentloaded", timeout=45_000)
+                    loaded = await self._load_page(page, current_url)
+                    if not loaded:
+                        break
+
+                    if page_num == 1:
+                        dismissed, status = await self._dismiss_cookie_banner(page)
+                        self._log.info(f"Cookie/modal: {status}")
+                        if dismissed:
+                            await page.wait_for_timeout(800)
 
                     wait_sel = source_defaults.get("wait_for")
                     if wait_sel:
@@ -701,39 +893,83 @@ class CrawlService:
 
         return None
 
-    async def _auto_scroll(self, page: Any) -> None:
+    async def _load_page(self, page: Any, url: str) -> bool:
+        """Load URL with adaptive wait strategy. Returns True on success."""
         try:
-            prev_height = 0
-            for _ in range(8):
-                height = await page.evaluate("document.body.scrollHeight")
-                if height == prev_height:
-                    break
-                prev_height = height
+            await page.goto(url, wait_until="networkidle", timeout=30_000)
+            return True
+        except Exception:
+            pass
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=25_000)
+            await page.wait_for_timeout(3000)
+            return True
+        except Exception as exc:
+            self._log.warning(f"Page load failed: {exc}")
+            return False
+
+    async def _dismiss_cookie_banner(self, page: Any) -> tuple[bool, str]:
+        """3-tier cookie/consent dismissal: CSS selectors → JS scan → give up."""
+        for sel in _COOKIE_SELECTORS:
+            try:
+                el = await page.query_selector(sel)
+                if el and await el.is_visible():
+                    await el.click()
+                    await page.wait_for_timeout(1000)
+                    return True, f"dismissed via selector: {sel[:60]}"
+            except Exception:
+                continue
+
+        try:
+            result = await page.evaluate(_COOKIE_DISMISS_JS)
+            if result.get("clicked"):
+                await page.wait_for_timeout(1500)
+                src = result.get("source", "js")
+                text = result.get("text", "")[:50]
+                return True, f"dismissed via JS scan ({src}): '{text}'"
+        except Exception as exc:
+            self._log.debug(f"Cookie JS scan failed: {exc}")
+
+        return False, "no cookie banner found"
+
+    async def _auto_scroll(self, page: Any) -> None:
+        """6-pass human-like scroll to trigger lazy-loaded content."""
+        passes = 6
+        try:
+            for i in range(passes):
                 await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(800)
+                await page.wait_for_timeout(900)
+                if i == passes // 2:
+                    await page.evaluate("window.scrollTo(0, 0)")
+                    await page.wait_for_timeout(600)
+            await page.evaluate("window.scrollTo(0, 0)")
         except Exception:
             pass
 
     # ── HTML fetch helpers ────────────────────────────────────────────────────
 
     async def _fetch_html_playwright(self, url: str) -> str:
-        """Fetch fully-rendered HTML via Playwright (handles JS-heavy sites)."""
+        """Fetch fully-rendered HTML via stealth Playwright (handles JS-heavy sites)."""
         from playwright.async_api import async_playwright
 
-        self._log.info(f"Playwright fetch: {url}")
+        self._log.info(f"Playwright stealth fetch: {url}")
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(
                 headless=self._settings.headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                args=_BROWSER_ARGS,
             )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-            )
+            context = await browser.new_context(**_CONTEXT_KWARGS)
+            await context.add_init_script(_STEALTH_SCRIPT)
             page = await context.new_page()
             try:
-                await page.goto(url, wait_until="domcontentloaded", timeout=45_000)
-                await page.wait_for_timeout(2000)
+                loaded = await self._load_page(page, url)
+                if not loaded:
+                    raise RuntimeError(f"Failed to load page: {url}")
+                dismissed, status = await self._dismiss_cookie_banner(page)
+                self._log.info(f"Cookie/modal: {status}")
+                if dismissed:
+                    await page.wait_for_timeout(800)
+                await self._auto_scroll(page)
                 html = await page.content()
             finally:
                 await browser.close()
