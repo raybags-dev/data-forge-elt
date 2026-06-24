@@ -8,6 +8,7 @@ from app.api.schemas.datasets import DatasetItem, DatasetListResponse
 from shared.logger import get_logger
 
 if TYPE_CHECKING:
+    from config.settings import Settings
     from datalake.manager import DataLakeManager
 
 
@@ -15,13 +16,16 @@ class DatasetService:
     """Provides dataset discovery and preview for the API layer.
 
     Scans the data lake for Parquet files and reads them on demand.
+    Falls back to S3 listing when configured.
 
     Args:
         lake: DataLakeManager instance for accessing lake files.
+        settings: Application settings (for S3 config).
     """
 
-    def __init__(self, lake: DataLakeManager) -> None:
+    def __init__(self, lake: DataLakeManager, settings: Settings | None = None) -> None:
         self._lake = lake
+        self._settings = settings
         self._log = get_logger(__name__)
 
     def list_datasets(self) -> DatasetListResponse:
@@ -48,6 +52,30 @@ class DatasetService:
                     )
             except Exception as exc:
                 self._log.warning(f"DatasetService: could not list layer '{layer}': {exc}")
+
+        # S3 supplement — list any objects in s3://bucket/raw/ not already found locally
+        if self._settings:
+            try:
+                from shared.storage_s3 import is_configured, list_objects
+                if is_configured(self._settings):
+                    seen_names = {it.name for it in items}
+                    for obj in list_objects(self._settings, prefix="raw/"):
+                        key = obj["Key"]  # e.g. raw/reddit_posts/data.parquet
+                        parts = key.split("/")
+                        if len(parts) >= 3 and key.endswith(".parquet"):
+                            fname = parts[-1]
+                            if fname not in seen_names:
+                                items.append(DatasetItem(
+                                    source="s3",
+                                    layer="raw",
+                                    name=fname,
+                                    path=f"s3://{self._settings.aws_s3_bucket}/{key}",
+                                    size_bytes=obj.get("Size", 0),
+                                    created_at=obj["LastModified"].isoformat() if "LastModified" in obj else "",
+                                ))
+                                seen_names.add(fname)
+            except Exception as exc:
+                self._log.debug(f"DatasetService: S3 listing skipped: {exc}")
 
         self._log.info(f"DatasetService: found {len(items)} dataset(s)")
         return DatasetListResponse(datasets=items, total=len(items))

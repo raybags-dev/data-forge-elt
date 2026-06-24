@@ -33,6 +33,7 @@ def app(tmp_path):
         get_settings_dep,
     )
     from config.settings import Settings
+    from shared.access import dataforge_access
 
     test_app = create_app()
 
@@ -57,6 +58,7 @@ def app(tmp_path):
     mock_kaggle_service = _build_mock_kaggle_service()
 
     test_app.dependency_overrides[get_settings_dep] = lambda: test_settings
+    test_app.dependency_overrides[dataforge_access] = lambda: None  # bypass rate limiter in tests
     test_app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
     test_app.dependency_overrides[get_pipeline_service] = lambda: mock_pipeline_service
     test_app.dependency_overrides[get_crawl_service] = lambda: mock_crawl_service

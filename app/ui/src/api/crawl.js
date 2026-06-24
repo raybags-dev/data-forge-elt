@@ -5,13 +5,20 @@ export async function fetchCrawlerStatus() {
   return data
 }
 
+function tokenHeader(appToken) {
+  const tok = appToken || sessionStorage.getItem('df_app_token')
+  return tok ? { 'X-App-Token': tok } : {}
+}
+
 export async function triggerCrawl(payload) {
-  const { data } = await client.post('/api/v1/crawl', payload)
+  const { appToken, ...body } = payload
+  const { data } = await client.post('/api/v1/crawl', body, { headers: tokenHeader(appToken) })
   return data
 }
 
 export async function analyzeCrawl(payload) {
-  const { data } = await client.post('/api/v1/crawl/analyze', payload)
+  const { appToken, ...body } = payload
+  const { data } = await client.post('/api/v1/crawl/analyze', body, { headers: tokenHeader(appToken) })
   return data
 }
 

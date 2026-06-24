@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { analyzeCrawl, getSources, parseCurl, triggerCrawl } from '../api/crawl.js'
+import { useTokenGate } from '../components/TokenGate.jsx'
 
 const SOURCES = ['reddit', 'steam', 'imdb', 'news', 'custom']
 const PAGINATION_MODES = ['none', 'page', 'cursor', 'scroll', 'button']
@@ -260,6 +261,7 @@ function LogsPanel({ open, onClose }) {
 // ── Main Crawlers page ────────────────────────────────────────────────────────
 
 export default function Crawlers() {
+  const tokenGate = useTokenGate()
   const [source, setSource] = useState('reddit')
   const [mode, setMode] = useState('dom')
   const [pagination, setPagination] = useState('none')
@@ -329,6 +331,13 @@ export default function Crawlers() {
         toast('Low confidence — review selectors manually', { icon: '⚠️' })
       }
     } catch (err) {
+      if (err.response?.status === 403) {
+        const detail = err.response?.data?.detail
+        if (detail === 'rate_limited' || detail === 'invalid_token') {
+          tokenGate?.trigger((tok) => { triggerCrawl({ url, source, appToken: tok }) })
+          return
+        }
+      }
       toast.error(`Analysis failed: ${err.message}`)
     } finally {
       setAnalyzing(false)
@@ -412,6 +421,16 @@ export default function Crawlers() {
         toast.error(`Crawl error: ${res.message}`)
       }
     } catch (err) {
+      if (err.response?.status === 403) {
+        const detail = err.response?.data?.detail
+        if (detail === 'rate_limited' || detail === 'invalid_token') {
+          tokenGate?.trigger((tok) => {
+            const savedToken = tok || tokenGate?.savedToken
+            triggerCrawl({ ...payload, appToken: savedToken }).then(setResult)
+          })
+          return
+        }
+      }
       toast.error(`Crawl failed: ${err.message}`)
     } finally {
       setCrawling(false)

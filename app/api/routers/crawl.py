@@ -16,6 +16,7 @@ from app.api.schemas.crawl import (
 )
 from app.dependencies import get_crawl_service
 from app.services.crawl_service import CrawlService
+from shared.access import dataforge_access
 
 router = APIRouter(prefix="/crawl", tags=["crawl"])
 
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/crawl", tags=["crawl"])
     response_model=CrawlResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger a web crawl",
+    dependencies=[Depends(dataforge_access)],
 )
 async def crawl(
     request: CrawlRequest,
@@ -38,6 +40,7 @@ async def crawl(
     response_model=AnalyzeResponse,
     summary="LLM-assisted DOM analysis",
     description="Fetch a URL, pass its HTML to Groq, return detected container + field selectors.",
+    dependencies=[Depends(dataforge_access)],
 )
 async def analyze(
     request: AnalyzeRequest,

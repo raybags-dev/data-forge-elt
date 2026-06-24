@@ -133,6 +133,7 @@ def _mount_routers(app: FastAPI) -> None:
     from app.api.routers.kaggle import router as kaggle_router
     from app.api.routers.logs import router as logs_router
     from app.api.routers.pipeline import router as pipeline_router
+    from app.api.routers.tokens import router as tokens_router
 
     prefix = "/api/v1"
     app.include_router(crawl_router, prefix=prefix)
@@ -142,6 +143,7 @@ def _mount_routers(app: FastAPI) -> None:
     app.include_router(datasets_router, prefix=prefix)
     app.include_router(dashboard_router, prefix=prefix)
     app.include_router(logs_router, prefix=prefix)
+    app.include_router(tokens_router, prefix=prefix)
 
 
 def _add_health_check(app: FastAPI) -> None:

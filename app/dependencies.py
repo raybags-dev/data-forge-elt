@@ -176,15 +176,19 @@ def get_dbt_service(settings: Settings = Depends(get_settings_dep)):
     return DbtService(settings=settings)
 
 
-def get_dataset_service(lake=Depends(get_lake)):
+def get_dataset_service(
+    lake=Depends(get_lake),
+    settings: Settings = Depends(get_settings_dep),
+):
     """Return a DatasetService for lake dataset discovery.
 
     Args:
         lake: Injected DataLakeManager.
+        settings: Injected Settings (for S3 config).
 
     Returns:
         DatasetService instance.
     """
     from app.services.dataset_service import DatasetService
 
-    return DatasetService(lake=lake)
+    return DatasetService(lake=lake, settings=settings)

@@ -988,11 +988,25 @@ class CrawlService:
     async def _save_records(self, records: list[dict[str, Any]], name: str) -> str:
         import pandas as pd
 
+        from shared.storage_s3 import is_configured, upload_parquet
         from shared.utils import ensure_directory
 
+        df = pd.DataFrame(records)
+
+        # Local parquet (persists via Docker volume mount)
         out_path = self._lake.layer_path("raw", name) / "data.parquet"
         ensure_directory(out_path.parent)
-        pd.DataFrame(records).to_parquet(out_path, index=False)
+        df.to_parquet(out_path, index=False)
+
+        # S3 upload (durable, cross-restart, cross-service)
+        if is_configured(self._settings):
+            try:
+                s3_key = f"raw/{name}/data.parquet"
+                s3_uri = upload_parquet(self._settings, df, s3_key)
+                self._log.info(f"Uploaded to S3: {s3_uri}")
+            except Exception as exc:
+                self._log.warning(f"S3 upload failed (local save succeeded): {exc}")
+
         return str(out_path)
 
     def _build_curl_body(
