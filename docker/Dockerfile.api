@@ -2,6 +2,8 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+ENV PYTHONPATH=/app
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
@@ -17,7 +19,7 @@ RUN uv run playwright install --with-deps chromium
 
 COPY . .
 
-RUN mkdir -p logs/screenshots datalake/raw datalake/bronze datalake/silver datalake/gold warehouse
+RUN mkdir -p data/logs/screenshots data/datalake/raw data/datalake/bronze data/datalake/silver data/datalake/gold data/warehouse
 
 EXPOSE 8002
 

@@ -174,11 +174,11 @@ jobs:
             SECRET_KEY=${APP_SECRET_KEY}
             ACCESS_TOKEN_EXPIRE_MINUTES=720
             LOG_LEVEL=INFO
-            LOG_DIR=${DATA_DIR}/logs
+            LOG_DIR=/app/data/logs
             LOG_ROTATION=10 MB
             LOG_RETENTION=30 days
-            DATA_LAKE=${DATA_DIR}/datalake
-            DUCKDB_PATH=${DATA_DIR}/warehouse/data.duckdb
+            DATA_LAKE=/app/data/datalake
+            DUCKDB_PATH=/app/data/warehouse/data.duckdb
             DBT_PROJECT_DIR=/app/dbt
             DBT_PROFILES_DIR=/app/dbt
             CRAWLER_TIMEOUT=60
@@ -187,7 +187,7 @@ jobs:
             RATE_LIMIT_RPS=0.5
             ROBOTS_TXT_COMPLIANCE=true
             SCREENSHOT_ON_FAILURE=true
-            SCREENSHOTS_DIR=${DATA_DIR}/logs/screenshots
+            SCREENSHOTS_DIR=/app/data/logs/screenshots
             DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
             KAGGLE_USERNAME=${KAGGLE_USERNAME}
             KAGGLE_KEY=${KAGGLE_KEY}
@@ -214,9 +214,9 @@ jobs:
                 ports:
                   - "8002:8002"
                 volumes:
-                  - ${DATA_DIR}/datalake:/app/datalake
-                  - ${DATA_DIR}/warehouse:/app/warehouse
-                  - ${DATA_DIR}/logs:/app/logs
+                  - ${DATA_DIR}/datalake:/app/data/datalake
+                  - ${DATA_DIR}/warehouse:/app/data/warehouse
+                  - ${DATA_DIR}/logs:/app/data/logs
                   - ${DATA_DIR}/dbt-target:/app/dbt/target
                 env_file: .env.prod
               streamlit:
@@ -225,9 +225,9 @@ jobs:
                 ports:
                   - "8501:8501"
                 volumes:
-                  - ${DATA_DIR}/datalake:/app/datalake
-                  - ${DATA_DIR}/warehouse:/app/warehouse
-                  - ${DATA_DIR}/logs:/app/logs
+                  - ${DATA_DIR}/datalake:/app/data/datalake
+                  - ${DATA_DIR}/warehouse:/app/data/warehouse
+                  - ${DATA_DIR}/logs:/app/data/logs
                 env_file: .env.prod
                 depends_on: [api]
               ui:
