@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     supabase_service_key: str | None = Field(default=None, alias="SUPABASE_SERVICE_KEY")
     supabase_bucket: str = Field(default="dataforge-elt-bucket", alias="SUPABASE_BUCKET")
 
+    # ── portfolio-base service-to-service ─────────────────────────────────────
+    portfolio_api_url: str | None = Field(default=None, alias="PORTFOLIO_API_URL")
+    portfolio_admin_token: str | None = Field(default=None, alias="PORTFOLIO_ADMIN_TOKEN")
+
     # ── PostgreSQL (Supabase) ─────────────────────────────────────────────────
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
 

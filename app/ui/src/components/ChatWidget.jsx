@@ -35,18 +35,23 @@ function SendIcon() {
 }
 
 export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
-  const [msgs, setMsgs]         = useState(() => loadCached())
-  const [input, setInput]       = useState('')
-  const [name, setName]         = useState(() => localStorage.getItem(LS_NAME))
-  const [nameFlow, setNameFlow] = useState(() => localStorage.getItem(LS_NAME) ? 'done' : 'idle')
-  const [endFlow, setEndFlow]   = useState('idle')  // 'idle' | 'confirming'
+  const [msgs, setMsgs]           = useState(() => loadCached())
+  const [input, setInput]         = useState('')
+  const [name, setName]           = useState(() => localStorage.getItem(LS_NAME))
+  const [nameFlow, setNameFlow]   = useState(() => localStorage.getItem(LS_NAME) ? 'done' : 'idle')
+  const [endFlow, setEndFlow]     = useState('idle')
   const [connected, setConnected] = useState(false)
 
-  const wsRef       = useRef(null)
-  const sidRef      = useRef(getOrCreateSid())
-  const bottomRef   = useRef(null)
-  const preSent     = useRef(false)
-  const systemShown = useRef(false)
+  const wsRef          = useRef(null)
+  const sidRef         = useRef(null)   // init in mount effect
+  const nameRef        = useRef(localStorage.getItem(LS_NAME))
+  const bottomRef      = useRef(null)
+  const preSent        = useRef(false)
+  const systemShown    = useRef(false)
+  const reconnectTimer = useRef(null)
+
+  // Keep nameRef in sync with state so connect() always uses the latest name
+  useEffect(() => { nameRef.current = name }, [name])
 
   const addMsg = useCallback((msg) => {
     setMsgs(prev => {
@@ -56,14 +61,20 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
     })
   }, [])
 
-  const connect = useCallback((visitorName) => {
+  // Stable connect — reads latest name from ref, no state deps
+  const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
-    const sid = sidRef.current
-    const url = visitorName && visitorName !== 'visitor'
-      ? `${PORTFOLIO_WS}/${sid}?name=${encodeURIComponent(visitorName)}`
+    clearTimeout(reconnectTimer.current)
+
+    const sid  = sidRef.current
+    const vname = nameRef.current
+    const url = vname && vname !== 'visitor'
+      ? `${PORTFOLIO_WS}/${sid}?name=${encodeURIComponent(vname)}`
       : `${PORTFOLIO_WS}/${sid}`
+
     const ws = new WebSocket(url)
     wsRef.current = ws
+
     ws.onopen = () => {
       setConnected(true)
       if (!systemShown.current) {
@@ -74,35 +85,47 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        // Server sends type:"msg" — also accept legacy "greeting"/"message" variants
+        // Server sends type:"msg" — also tolerate "greeting"/"message" variants
         if (data.type === 'msg' || data.type === 'greeting' || data.type === 'message') {
-          addMsg({ id: genId(), sender: data.sender ?? 'agent', content: data.content ?? data.message ?? '', ts: data.ts ?? Date.now() / 1000 })
+          addMsg({
+            id: genId(),
+            sender: data.sender ?? 'agent',
+            content: data.content ?? data.message ?? '',
+            ts: data.ts ?? Date.now() / 1000,
+          })
         }
       } catch {
         addMsg({ id: genId(), sender: 'agent', content: e.data, ts: Date.now() / 1000 })
       }
     }
-    ws.onclose = () => setConnected(false)
-    ws.onerror = () => setConnected(false)
+    ws.onerror = () => ws.close()  // triggers onclose → auto-reconnect
+    ws.onclose = () => {
+      setConnected(false)
+      reconnectTimer.current = setTimeout(connect, 3000)
+    }
   }, [addMsg])
 
+  // Connect once on mount — stays connected in background regardless of panel open/close.
+  // This is the same pattern as portfolio-base: no CONNECTING flash when the user opens the panel.
   useEffect(() => {
-    if (isOpen && nameFlow === 'done') connect(name)
+    sidRef.current = getOrCreateSid()
+    connect()
     return () => {
-      if (!isOpen && wsRef.current) {
+      clearTimeout(reconnectTimer.current)
+      if (wsRef.current) {
+        wsRef.current.onclose = null  // prevent reconnect on intentional teardown
         wsRef.current.close()
-        wsRef.current = null
-        setConnected(false)
       }
     }
-  }, [isOpen, nameFlow, name, connect])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
+  // Auto-send preMessage once connected (token gate "chat to request" flow)
   useEffect(() => {
     if (connected && preMessage && !preSent.current) {
       preSent.current = true
       setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          // Must use type:"msg" — server ignores any other type
           wsRef.current.send(JSON.stringify({ type: 'msg', content: preMessage }))
           addMsg({ id: genId(), sender: 'user', content: preMessage, ts: Date.now() / 1000 })
         }
@@ -117,7 +140,6 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
   function handleSend() {
     const text = input.trim()
     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return
-    // Server only processes type:"msg" — "message" or "greeting" are silently dropped
     wsRef.current.send(JSON.stringify({ type: 'msg', content: text }))
     addMsg({ id: genId(), sender: 'user', content: text, ts: Date.now() / 1000 })
     setInput('')
@@ -129,14 +151,23 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
     const val = e.target.nameInput.value.trim()
     if (!val) return
     localStorage.setItem(LS_NAME, val)
+    nameRef.current = val
     setName(val)
     setNameFlow('done')
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'meta', visitor_name: val }))
+    }
   }
 
-  function handleEndSession() {
-    wsRef.current?.close()
+  function doReset(keepName) {
+    clearTimeout(reconnectTimer.current)
+    if (wsRef.current) {
+      wsRef.current.onclose = null  // prevent stale auto-reconnect
+      wsRef.current.close()
+    }
     wsRef.current = null
-    clearSession(true)
+
+    clearSession(keepName)
     const newSid = genId()
     localStorage.setItem(LS_SID, newSid)
     sidRef.current = newSid
@@ -145,26 +176,20 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
     setMsgs([])
     setConnected(false)
     setEndFlow('idle')
+    if (!keepName) {
+      nameRef.current = null
+      setName(null)
+      setNameFlow('idle')
+    }
     onClose()
+    // Fresh connection after reset
+    setTimeout(connect, 200)
   }
 
-  function handleDeleteData() {
-    const sid = sidRef.current
-    fetch(`${CHAT_REST_BASE}/${sid}/messages`, { method: 'DELETE' }).catch(() => {})
-    wsRef.current?.close()
-    wsRef.current = null
-    clearSession(false)
-    const newSid = genId()
-    localStorage.setItem(LS_SID, newSid)
-    sidRef.current = newSid
-    systemShown.current = false
-    preSent.current = false
-    setMsgs([])
-    setName(null)
-    setNameFlow('idle')
-    setConnected(false)
-    setEndFlow('idle')
-    onClose()
+  function handleEndSession()  { doReset(true) }
+  function handleDeleteData()  {
+    fetch(`${CHAT_REST_BASE}/${sidRef.current}/messages`, { method: 'DELETE' }).catch(() => {})
+    doReset(false)
   }
 
   // ── FAB ────────────────────────────────────────────────────────────────────
@@ -214,19 +239,18 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
         }}>💬</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: '#fff', fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Chat with Raybags</div>
-          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11 }}>
-            <span style={{ marginRight: 3, fontSize: 8 }}>{connected ? '●' : '○'}</span>
-            {connected ? 'Online' : 'Connecting…'}
+          <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11 }}>
+            {connected
+              ? <><span style={{ fontSize: 8, marginRight: 3 }}>●</span>Online</>
+              : <><span style={{ fontSize: 8, marginRight: 3 }}>○</span>Connecting…</>}
           </div>
         </div>
-        {/* End chat button */}
         <button
           onClick={() => setEndFlow(f => f === 'confirming' ? 'idle' : 'confirming')}
           style={{
             background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
             cursor: 'pointer', borderRadius: 6,
-            padding: '4px 8px', fontSize: 11, fontWeight: 500,
-            flexShrink: 0,
+            padding: '4px 8px', fontSize: 11, fontWeight: 500, flexShrink: 0,
           }}
         >End chat</button>
         <button
@@ -272,7 +296,7 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
         </form>
       )}
 
-      {/* Messages — flex:1 + minHeight:0 is required for overflow scroll to work */}
+      {/* Messages — flex:1 + minHeight:0 required for overflow-y scroll */}
       <div style={{
         flex: 1, minHeight: 0, overflowY: 'auto',
         padding: '12px 14px',
@@ -309,7 +333,7 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
           )
         })}
 
-        {/* End-session confirmation card (inline in message area) */}
+        {/* End-session confirmation card */}
         {endFlow === 'confirming' && (
           <div style={{
             margin: '4px 0',
@@ -351,7 +375,7 @@ export default function ChatWidget({ isOpen, onClose, onOpen, preMessage }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar — always anchored at bottom */}
+      {/* Input bar */}
       <div style={{
         flexShrink: 0,
         padding: '9px 12px', borderTop: '1px solid #2d2d44',
